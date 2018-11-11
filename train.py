@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
-from bot.model import HaliteModel
+from player.model import HaliteModel
 
 m = HaliteModel()
-m.train_on_files('training_data', './model.ckpt')
+m.train_on_files('../training_data', 'models/model_{}.ckpt')
 #m.save(file_name='aggressive.svc')
 
 #m = model.HaliteModel()

@@ -91,12 +91,13 @@ def horizontal_lstm(cell, num_units, inputs, seq_lengths, scope=None):
     return output
 
 def bidirectional_horizontal_lstm(cell, num_units, inputs, seq_lengths, scope=None):
+    he_init = tf.contrib.layers.variance_scaling_initializer()
     with variable_scope.variable_scope(scope, "BiHorizontalLstm", [inputs]):
         batch_size = tf.shape(inputs)[0]
         sequence = grid_to_sequence(inputs)
 
-        forward_cell = cell(num_units)
-        backward_cell = cell(num_units)
+        forward_cell = cell(num_units, kernel_initializer=he_init, bias_initializer=he_init)
+        backward_cell = cell(num_units, kernel_initializer=he_init, bias_initializer=he_init)
         outputs, states = bidirectional_dynamic_rnn(
             forward_cell, backward_cell, sequence, sequence_length=seq_lengths, time_major=True, dtype=tf.float32)
 

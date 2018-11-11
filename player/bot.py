@@ -3,6 +3,7 @@ import logging
 import os
 from collections import defaultdict
 import random
+import time
 
 from player import hlt
 from player import model
@@ -13,13 +14,16 @@ from player.hlt import positionals
 
 class Bot:
     def __init__(self, name, ckpt_file):
-        # Get the initial game state
-        game = hlt.Game()
-        game.ready(name)
-
+        logging.warning('initializing model')
         # During init phase: initialize the model and compile it
         my_model = model.HaliteModel(cached_model=ckpt_file)
 
+        # Get the initial game state
+        logging.warning('intializing game')
+        game = hlt.Game()
+        game.ready(name)
+
+        logging.warning("bot initialized")
         self.my_model = my_model
         self.game = game
 
@@ -29,14 +33,14 @@ class Bot:
         logging.warning("beginning game")
         while True:
             self.game.update_frame()
-            logging.warning("new turn")
+            logging.warning("turn {}".format(self.game.turn_number))
+            turn_start = time.time()
             me = self.game.me  # Here we extract our player metadata from the game state
             game_map = self.game.game_map  # And here we extract the map metadata
             other_players = [p for pid, p in self.game.players.items() if pid != self.game.my_id]
 
             command_queue = []
 
-            logging.warning("making predictions")
             predicted_moves = self.my_model.predict_moves(game_map, me, other_players, self.game.turn_number)
             logging.warning(predicted_moves)
             for ship in me.get_ships():  # For each of our ships
@@ -71,4 +75,5 @@ class Bot:
                     not game_map[me.shipyard].is_occupied and len(me.get_ships()) <= 4:
                 command_queue.append(self.game.me.shipyard.spawn())
 
+            logging.warning("turn took {}".format(time.time() - turn_start))
             self.game.end_turn(command_queue)  # Send our moves back to the game environment

@@ -43,14 +43,14 @@ def parse_replay_data(data, player_name):
     for x in range(len(data['production_map']['grid'])):
         row = []
         for y in range(len(data['production_map']['grid'][x])):
-            row += [data['production_map']['grid'][x][y]['energy']]
+            row += [data['production_map']['grid'][y][x]['energy']]
         first_cells.append(row)
     frames = []
     for f in data['full_frames']:
         prev_cells = first_cells if len(frames) == 0 else frames[-1]
         new_cells = json.loads(json.dumps(prev_cells))
         for c in f['cells']:
-            new_cells[c['y']][c['x']] = c['production']
+            new_cells[c['x']][c['y']] = c['production']
         frames.append(new_cells)
     moves = [{} if str(player_id) not in f['moves'] else {m['id']: m['direction'] for m in f['moves'][str(player_id)] if
                                                           m['type'] == "m"} for f in data['full_frames']]
@@ -78,7 +78,7 @@ def parse_replay_data(data, player_name):
                         hlt.Dropoff(e['owner_id'], ARBITRARY_ID, hlt.Position(e['location']['x'], e['location']['y'])))
         my_dropoffs.append(new_my_dropoffs)
         them_dropoffs.append(new_them_dropoffs)
-    return [ GameState(*args) for args in zip(frames, moves, ships, other_ships, my_dropoffs, them_dropoffs) ]
+    return [ GameState(*args) for args in zip(range(len(data['full_frames'])), frames, moves, ships, other_ships, my_dropoffs, them_dropoffs) ]
 
 
 def parse_replay_folder(folder_name, max_files=None):
