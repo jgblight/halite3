@@ -43,6 +43,17 @@ class GameState:
 
         return feature_map
 
+    def get_features_for_ship(self, ship_id):
+        ship = self.ships[ship_id]
+        feature_map = np.zeros((MAX_BOARD_SIZE, MAX_BOARD_SIZE, FEATURE_SIZE), dtype=np.float32)
+        for x in range(self.map_size):
+            for y in range(self.map_size):
+                x_1 = (x - (1 + ship.position.x)) % self.map_size
+                y_1 = (y - (1 + ship.position.y)) % self.map_size
+                feature_map[x_1][y_1][0] = self.frame[x][y]
+        return feature_map
+
+
     def get_expected_moves(self):
         move_map = np.zeros((MAX_BOARD_SIZE, MAX_BOARD_SIZE))
         for ship_id, ship in self.ships.items():
@@ -59,6 +70,6 @@ class GameState:
     def get_ship_moves(self):
         move_list = []
         for ship_id, ship in self.ships.items():
-            move_idx = MOVE_TO_OUTPUT[self.moves.get(ship_id, 'o')]
-            move_list.append((move_idx, (ship.position.x, ship.position.y)))
+            move = self.moves.get(ship_id, 'o')
+            move_list.append((ship_id, move))
         return move_list

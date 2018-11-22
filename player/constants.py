@@ -15,9 +15,9 @@ MOVE_TO_DIRECTION = {
     "e": positionals.Direction.East,
     "s": positionals.Direction.South}
 OUTPUT_TO_MOVE = {
-    4: "o",
-    0: "w",
-    1: "n",
-    2: "e",
-    3: "s"}
-MOVE_TO_OUTPUT = {v: k for k, v in OUTPUT_TO_MOVE.items()}
+    0: "o",
+    1: "w",
+    2: "n",
+    3: "e",
+    4: "s"}
+MOVE_TO_OUTPUT = {v: k  for k, v in OUTPUT_TO_MOVE.items()}
