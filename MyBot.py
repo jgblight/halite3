@@ -3,6 +3,6 @@ from player.bot import Bot
 
 if __name__ == '__main__':
     logging.warning('initializing bot')
-    bot = Bot('bot', './model.ckpt')
+    bot = Bot('bot', 'models/model_{}.ckpt')
     logging.warning('initialized')
     bot.run()

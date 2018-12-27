@@ -65,8 +65,10 @@ class Bot:
                     movement = game_map.get_safe_move(game_map[ship.position],
                                                       game_map[ship.position.directional_offset(ml_move)])
                     if movement is not None:
-                        game_map[ship.position.directional_offset(movement)].mark_unsafe(ship)
-                        command_queue.append(ship.move(movement))
+                        cell = game_map[ship.position.directional_offset(movement)]
+                        if not (cell.has_structure and ship.halite_amount < 100):
+                            cell.mark_unsafe(ship)
+                            command_queue.append(ship.move(movement))
                         continue
                 ship.stay_still()
 

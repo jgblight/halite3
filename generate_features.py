@@ -24,9 +24,7 @@ def write_states(files, output_folder):
             map_size = state.map_size
             for move in moves:
                 ship_id, move_label = move
-                if move_label == 'o':
-                    continue
-                features = state.get_features_for_ship(ship_id)
+                features = state.input_for_ship(ship_id)
                 output_file = '{}_{}_{}.pkl'.format(i, j, ship_id)
                 payload = (map_size, move_label, features)
                 with open(os.path.join(output_folder, output_file),'wb') as f:
