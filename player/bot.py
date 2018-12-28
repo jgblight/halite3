@@ -60,15 +60,17 @@ class Bot:
                 # Use machine learning to get a move
                 ml_move = predicted_moves.get(ship.id)
                 if ml_move is not None:
+                    if ml_move != positionals.Direction.Still and ship.halite_amount < (game_map[ship.position].halite_amount/10):
+                        ship.stay_still()
+                        continue
                     if ml_move == positionals.Direction.Still and game_map[ship.position].halite_amount == 0:
                         ml_move = random.choice(DIRECTION_ORDER)
                     movement = game_map.get_safe_move(game_map[ship.position],
                                                       game_map[ship.position.directional_offset(ml_move)])
                     if movement is not None:
                         cell = game_map[ship.position.directional_offset(movement)]
-                        if not (cell.has_structure and ship.halite_amount < 100):
-                            cell.mark_unsafe(ship)
-                            command_queue.append(ship.move(movement))
+                        cell.mark_unsafe(ship)
+                        command_queue.append(ship.move(movement))
                         continue
                 ship.stay_still()
 

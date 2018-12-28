@@ -1,4 +1,5 @@
 import os
+import glob
 import time
 import gc
 import logging
@@ -23,6 +24,11 @@ def train_test_split(folder, data_size, split=0.2):
     test_indices = indices[:test_size]
     train_indices = indices[test_size:data_size]
     return files[train_indices], files[test_indices]
+
+def randomize_order(folder):
+    files = np.array(glob.glob(os.path.join(folder, '*.pkl')))
+    random_files = np.random.permutation(files)
+
 
 def data_gen(folder, batch_size):
     files = np.array(sorted([ os.path.join(folder, f) for f in os.listdir(folder)]))
@@ -128,6 +134,7 @@ class HaliteModel:
 
             conv2_fmaps = 16
             conv2_ksize = 5
+            dropout_rate = 0.5
 
             he_init = tf.contrib.layers.variance_scaling_initializer()
             bn_params = {
@@ -147,15 +154,15 @@ class HaliteModel:
             #num_features = relu2.get_shape()[1:4].num_elements()
             #flat = tf.reshape(relu2, [-1, num_features])
 
-            fc1 = slim.fully_connected(inputs=self.x, num_outputs=50,
+            fc1 = tf.contrib.layers.fully_connected(inputs=self.x, num_outputs=50,
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
-            fc2 = slim.fully_connected(inputs=fc1, num_outputs=40,
+            fc2 = tf.contrib.layers.fully_connected(inputs=fc1, num_outputs=40,
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
-            fc3 = slim.fully_connected(inputs=fc2, num_outputs=30,
+            fc3 = tf.contrib.layers.fully_connected(inputs=fc2, num_outputs=30,
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
-            fc4 = slim.fully_connected(inputs=fc3, num_outputs=20,
+            fc4 = tf.contrib.layers.fully_connected(inputs=fc3, num_outputs=20,
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
-            fc5 = slim.fully_connected(inputs=fc4, num_outputs=10,
+            fc5 = tf.contrib.layers.fully_connected(inputs=fc4, num_outputs=10,
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
 
             self.logits = slim.fully_connected(inputs=fc5,
@@ -227,7 +234,7 @@ class HaliteModel:
         i = 0
         epochs = 10
         for x in range(epochs):
-            for batch in data_gen(folder, 20):
+            for batch in data_gen(folder, 50):
                 t = time.time()
                 training_predictions, loss, _, accuracy = self.run_batch(
                     [self.predictions, self.loss, self.grad_update, self.accuracy], batch, True)
@@ -235,5 +242,8 @@ class HaliteModel:
                 #print(batch[1])
                 #print(np.ndarray.flatten(training_predictions[1]))
                 #print('Accuracy: {}'.format(accuracy))
-            self.test_eval()
-            self.saver.save(self.session, ckpt_file)
+                i += 1
+                if not (i % 1000):
+                    print("Training Loss: {}".format(loss))
+                    self.test_eval()
+                    self.saver.save(self.session, ckpt_file.format(i))

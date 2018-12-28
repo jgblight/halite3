@@ -3,7 +3,7 @@
 from player.model import HaliteModel
 
 m = HaliteModel()
-m.train_on_files('../train', 'models/model.ckpt')
+m.train_on_files('../train', 'models/model_{}.ckpt')
 #m.save(file_name='aggressive.svc')
 
 #m = model.HaliteModel()
