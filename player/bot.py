@@ -63,10 +63,21 @@ class Bot:
                     if ml_move != positionals.Direction.Still and ship.halite_amount < (game_map[ship.position].halite_amount/10):
                         ship.stay_still()
                         continue
-                    if ml_move == positionals.Direction.Still and game_map[ship.position].halite_amount == 0:
+                    if ml_move == positionals.Direction.Still and (game_map[ship.position].halite_amount == 0 or (game_map[ship.position].has_structure and ship.halite_amount == 0)):
                         ml_move = random.choice(DIRECTION_ORDER)
                     movement = game_map.get_safe_move(game_map[ship.position],
                                                       game_map[ship.position.directional_offset(ml_move)])
+
+                    if ml_move != positionals.Direction.Still and movement is None:
+                        i = DIRECTION_ORDER.index(ml_move)
+                        stop = i + 3
+
+                        while movement is None and i < stop:
+                            i += 1
+                            ml_move = DIRECTION_ORDER[i%4]
+                            movement = game_map.get_safe_move(game_map[ship.position],
+                                                              game_map[ship.position.directional_offset(ml_move)])
+                    logging.warning("ship {} moving {}".format(ship.id, ml_move))
                     if movement is not None:
                         cell = game_map[ship.position.directional_offset(movement)]
                         cell.mark_unsafe(ship)
