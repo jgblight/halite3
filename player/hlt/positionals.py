@@ -80,6 +80,9 @@ class Position:
         """
         return [self.directional_offset(current_direction) for current_direction in Direction.get_all_cardinals()]
 
+    def __hash__(self):
+        return hash((self.x, self.y))
+
     def __add__(self, other):
         return Position(self.x + other.x, self.y + other.y)
 

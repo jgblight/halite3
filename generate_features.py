@@ -12,7 +12,7 @@ data_folder = '../training_data'
 train_folder = '../train'
 test_folder = '../test'
 player = 'TheDuck314'
-data_size = 1000
+data_size = 300
 split = 0.2
 
 def process_file(i, filename, output_folder):

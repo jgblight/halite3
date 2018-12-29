@@ -120,7 +120,7 @@ class HaliteModel:
             # Build network
             # Input placeholder
             #self.x = tf.placeholder(tf.float32, [None, self.h, self.w, FEATURE_SIZE])
-            self.x = tf.placeholder(tf.float32, [None, 78])
+            self.x = tf.placeholder(tf.float32, [None, 83])
             # Output placeholder
             self.y = tf.placeholder(tf.int32, [None])
             self.weights = tf.placeholder(tf.float32, [OUTPUT_SIZE])
@@ -156,13 +156,17 @@ class HaliteModel:
 
             fc1 = tf.contrib.layers.fully_connected(inputs=self.x, num_outputs=50,
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
-            fc2 = tf.contrib.layers.fully_connected(inputs=fc1, num_outputs=40,
+            d1 = tf.layers.dropout(inputs=fc1, rate=dropout_rate, training=self.training)
+            fc2 = tf.contrib.layers.fully_connected(inputs=d1, num_outputs=40,
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
-            fc3 = tf.contrib.layers.fully_connected(inputs=fc2, num_outputs=30,
+            d2 = tf.layers.dropout(inputs=fc1, rate=dropout_rate, training=self.training)
+            fc3 = tf.contrib.layers.fully_connected(inputs=d2, num_outputs=30,
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
-            fc4 = tf.contrib.layers.fully_connected(inputs=fc3, num_outputs=20,
+            d3 = tf.layers.dropout(inputs=fc1, rate=dropout_rate, training=self.training)
+            fc4 = tf.contrib.layers.fully_connected(inputs=d3, num_outputs=20,
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
-            fc5 = tf.contrib.layers.fully_connected(inputs=fc4, num_outputs=10,
+            d4 = tf.layers.dropout(inputs=fc1, rate=dropout_rate, training=self.training)
+            fc5 = tf.contrib.layers.fully_connected(inputs=d4, num_outputs=10,
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
 
             self.logits = slim.fully_connected(inputs=fc5,

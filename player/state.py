@@ -116,6 +116,11 @@ class GameState:
         for i in range(0, 200, 50):
             result.append(int(self.game_map[ship.position].halite_amount <= i))
         result.append(self.game_map[ship.position].halite_amount / 1000)
+
+        # current ship halite indicators
+        for i in range(0, 200, 50):
+            result.append(int(ship.halite_amount <= i))
+        result.append(ship.halite_amount / 1000)
         return result
 
     def get_expected_moves(self):

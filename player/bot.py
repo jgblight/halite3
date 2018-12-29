@@ -26,6 +26,21 @@ class Bot:
         logging.warning("bot initialized")
         self.my_model = my_model
         self.game = game
+        self.last_move = {}
+        self.avoid = set()
+
+    def is_dumb_move(self, game_map, ship, ml_move):
+        destination = ship.position.directional_offset(ml_move)
+        if not game_map.get_safe_move(game_map[ship.position],
+                                          game_map[destination]):
+            return True
+
+        if destination in self.avoid:
+            return True
+
+        if ship.id in self.last_move and self.last_move[ship.id] == destination:
+            return True
+        return False
 
     def run(self):
         # Some minimal state to say when to go home
@@ -39,10 +54,16 @@ class Bot:
             game_map = self.game.game_map  # And here we extract the map metadata
             other_players = [p for pid, p in self.game.players.items() if pid != self.game.my_id]
 
+            self.avoid = set()
+            for player in other_players:
+                for ship in player.get_ships():
+                    for dir in DIRECTION_ORDER:
+                        self.avoid.add(ship.position.directional_offset(dir))
+
             command_queue = []
 
             predicted_moves = self.my_model.predict_moves(game_map, me, other_players, self.game.turn_number)
-            logging.warning(predicted_moves)
+
             for ship in me.get_ships():  # For each of our ships
                 # Did not machine learn going back to base. Manually tell ships to return home
                 if ship.position == me.shipyard.position:
@@ -65,22 +86,21 @@ class Bot:
                         continue
                     if ml_move == positionals.Direction.Still and (game_map[ship.position].halite_amount == 0 or (game_map[ship.position].has_structure and ship.halite_amount == 0)):
                         ml_move = random.choice(DIRECTION_ORDER)
-                    movement = game_map.get_safe_move(game_map[ship.position],
-                                                      game_map[ship.position.directional_offset(ml_move)])
 
-                    if ml_move != positionals.Direction.Still and movement is None:
+                    if ml_move != positionals.Direction.Still and self.is_dumb_move(game_map, ship, ml_move):
                         i = DIRECTION_ORDER.index(ml_move)
                         stop = i + 3
 
-                        while movement is None and i < stop:
+                        while self.is_dumb_move(game_map, ship, ml_move) and i < stop:
                             i += 1
                             ml_move = DIRECTION_ORDER[i%4]
-                            movement = game_map.get_safe_move(game_map[ship.position],
-                                                              game_map[ship.position.directional_offset(ml_move)])
-                    logging.warning("ship {} moving {}".format(ship.id, ml_move))
+
+                    movement = game_map.get_safe_move(game_map[ship.position],
+                                                      game_map[ship.position.directional_offset(ml_move)])
                     if movement is not None:
                         cell = game_map[ship.position.directional_offset(movement)]
                         cell.mark_unsafe(ship)
+                        self.last_move[ship.id] = ship.position
                         command_queue.append(ship.move(movement))
                         continue
                 ship.stay_still()
