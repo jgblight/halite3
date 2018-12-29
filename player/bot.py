@@ -68,7 +68,7 @@ class Bot:
                 # Did not machine learn going back to base. Manually tell ships to return home
                 if ship.position == me.shipyard.position:
                     go_home[ship.id] = False
-                elif go_home[ship.id] or ship.halite_amount == constants.MAX_HALITE:
+                elif go_home[ship.id] or ship.halite_amount == 800:
                     go_home[ship.id] = True
                     movement = game_map.get_safe_move(game_map[ship.position], game_map[me.shipyard.position])
                     if movement is not None:
