@@ -1,6 +1,7 @@
 import os
 import pickle
 import numpy as np
+import random
 import shutil
 from multiprocessing import Pool
 
@@ -12,26 +13,28 @@ data_folder = '../training_data'
 train_folder = '../train'
 test_folder = '../test'
 player = 'TheDuck314'
-data_size = 300
+data_size = 500
 split = 0.2
 
 def process_file(i, filename, output_folder):
     print("parsing {}: {}".format(i, filename))
     states = parse_replay_file(filename, player)
-    selected_states = np.random.permutation(states)[:50]
+    late_states = states[30:]
+    random.shuffle(late_states)
+    selected_states = states[:30] + late_states[:30]
     for j, state in enumerate(selected_states):
         moves = state.get_ship_moves()
+        random.shuffle(moves)
+        moves = moves[:10]
 
         map_size = state.map_size
         for ship_id, move_label in moves:
             move_id = MOVE_TO_OUTPUT[move_label]
-            for rot in range(4):  # do all 4 rotations for each game state
-                features = state.input_for_ship(ship_id, rotation=rot)
-                output_file = '{}_{}_{}_{}.pkl'.format(i, j, ship_id, rot)
-                payload = (map_size, OUTPUT_TO_MOVE[move_id], features)
-                with open(os.path.join(output_folder, output_file),'wb') as f:
-                    pickle.dump(payload, f)
-                move_id = 0 if move_id == 0 else (move_id % 4) + 1
+            features = state.get_features_for_ship(ship_id)
+            output_file = '{}_{}_{}.pkl'.format(i, j, ship_id)
+            payload = (map_size, OUTPUT_TO_MOVE[move_id], features)
+            with open(os.path.join(output_folder, output_file),'wb') as f:
+                pickle.dump(payload, f)
 
     print("done parsing " + filename)
     return filename

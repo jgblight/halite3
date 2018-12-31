@@ -10,6 +10,7 @@ from player.parse import parse_winner, parse_replay_file
 from player.ndlstm import separable_lstm2
 from player.state import GameState
 from player.constants import MAX_BOARD_SIZE, FEATURE_SIZE, OUTPUT_SIZE, MOVE_TO_DIRECTION, OUTPUT_TO_MOVE, MOVE_TO_OUTPUT
+from player.utils import Timer
 
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
@@ -119,22 +120,22 @@ class HaliteModel:
             logging.warning("creating placeholders")
             # Build network
             # Input placeholder
-            #self.x = tf.placeholder(tf.float32, [None, self.h, self.w, FEATURE_SIZE])
-            self.x = tf.placeholder(tf.float32, [None, 83])
+            self.x = tf.placeholder(tf.float32, [None, self.h, self.w, FEATURE_SIZE])
+            #self.x = tf.placeholder(tf.float32, [None, 83])
             # Output placeholder
             self.y = tf.placeholder(tf.int32, [None])
-            self.weights = tf.placeholder(tf.float32, [OUTPUT_SIZE])
             self.mask = tf.placeholder(tf.int32, [None, 3])
-            self.seq_lengths1 = tf.placeholder(tf.int32, [None])
-            self.seq_lengths2 = tf.placeholder(tf.int32, [None])
             self.training = tf.placeholder(tf.bool)
 
-            conv1_fmaps = 16
-            conv1_ksize = 5
+            conv1_fmaps = 30
+            conv1_ksize = 3
 
-            conv2_fmaps = 16
-            conv2_ksize = 5
-            dropout_rate = 0.5
+            conv2_fmaps = 20
+            conv2_ksize = 3
+
+            conv3_fmaps = 20
+            conv3_ksize = 5
+            dropout_rate = 0.20
 
             he_init = tf.contrib.layers.variance_scaling_initializer()
             bn_params = {
@@ -143,18 +144,23 @@ class HaliteModel:
 
             logging.warning("creating graph")
             start = time.time()
-            #conv1, conv1_weights = new_conv_layer(self.x, FEATURE_SIZE, conv1_ksize, conv1_fmaps, 'conv1')
-            #pool1 = new_pool_layer(conv1, 'pool1')
-            #relu1 = new_relu_layer(pool1, 'relu1')
 
-            #conv2, conv2_weights = new_conv_layer(relu1, conv1_fmaps, conv2_ksize, conv2_fmaps, 'conv2')
-            #pool2 = new_pool_layer(conv2, 'pool2')
-            #relu2 = new_relu_layer(pool2, 'relu2')
+            x_norm = tf.layers.batch_normalization(self.x, training=self.training)
+            conv1, conv1_weights = new_conv_layer(x_norm, FEATURE_SIZE, conv1_ksize, conv1_fmaps, 'conv1')
+            pool1 = new_pool_layer(conv1, 'pool1')
+            relu1 = new_relu_layer(pool1, 'relu1')
 
-            #num_features = relu2.get_shape()[1:4].num_elements()
-            #flat = tf.reshape(relu2, [-1, num_features])
+            conv2, conv2_weights = new_conv_layer(relu1, conv1_fmaps, conv2_ksize, conv2_fmaps, 'conv2')
+            pool2 = new_pool_layer(conv2, 'pool2')
+            relu2 = new_relu_layer(pool2, 'relu2')
 
-            fc1 = tf.contrib.layers.fully_connected(inputs=self.x, num_outputs=50,
+            conv3, conv3_weights = new_conv_layer(relu2, conv2_fmaps, conv3_ksize, conv3_fmaps, 'conv3')
+            pool3 = new_pool_layer(conv3, 'pool3')
+            relu3 = new_relu_layer(pool3, 'relu3')
+
+            flat = tf.layers.flatten(relu3)
+
+            fc1 = tf.contrib.layers.fully_connected(inputs=flat, num_outputs=50,
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
             d1 = tf.layers.dropout(inputs=fc1, rate=dropout_rate, training=self.training)
             fc2 = tf.contrib.layers.fully_connected(inputs=d1, num_outputs=40,
@@ -173,10 +179,11 @@ class HaliteModel:
                                              num_outputs=OUTPUT_SIZE,
                                              activation_fn=None)
             self.predictions = tf.nn.top_k(self.logits)
-            #weighted_logits = tf.multiply(self.logits, tf.broadcast_to(self.weights, tf.shape(self.logits)))
             self.xentropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.y, logits=self.logits)
             self.loss = tf.reduce_mean(self.xentropy)
-            self.grad_update = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
+            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+            with tf.control_dependencies(update_ops):
+                self.grad_update = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
             self.accuracy = tf.reduce_mean(tf.cast(tf.nn.in_top_k(self.logits, self.y, 2), tf.float32))
             self.saver = tf.train.Saver()
 
@@ -200,11 +207,15 @@ class HaliteModel:
             return {}
         feature_list = []
         for sid in ship_ids:
-            feature_list.append(game_state.input_for_ship(sid))
+            feature_list.append(game_state.get_features_for_ship(sid))
         feature_map = np.stack(feature_list, axis=0)
 
-        feed_dict = {self.x: feature_map, self.training: False}
-        _, moves = self.session.run([self.predictions], feed_dict=feed_dict)[0]
+
+        with Timer("Generate Prediction"):
+            feed_dict = {self.x: feature_map, self.training: False}
+            logit, predictions = self.session.run([self.logits,self.predictions], feed_dict=feed_dict)
+        logging.warning(logit)
+        _, moves = predictions
         move_dict = {}
         moves = np.ndarray.flatten(moves)
         for i, sid in enumerate(ship_ids):
@@ -217,10 +228,11 @@ class HaliteModel:
         batch = next(data_gen('../test', 1000))
         accuracy = self.run_batch([self.accuracy], batch, False)
         batch = next(data_gen('../test', 100))
-        training_predictions = self.run_batch([self.predictions], batch, False)
+        logits, training_predictions = self.run_batch([self.logits, self.predictions], batch, False)
         print('Test Accuracy: {}'.format(accuracy))
         print(batch[1])
-        print(np.ndarray.flatten(training_predictions[0][1]))
+        print(logits)
+        print(np.ndarray.flatten(training_predictions[1]))
 
     def run_batch(self, eval_list, batch, training):
         weights = np.array([0.1,1,1,1,1])
@@ -229,8 +241,7 @@ class HaliteModel:
         for map_size in size_list:
             sequence_lengths1 += [ map_size for i in range(MAX_BOARD_SIZE)]
         sequence_lengths2 = np.array(size_list)
-        feed_dict = {self.x: features, self.y:moves,
-                     self.seq_lengths1: sequence_lengths1, self.seq_lengths2: sequence_lengths2, self.training: True, self.weights: weights}
+        feed_dict = {self.x: features, self.y:moves, self.training: training}
         return self.session.run(eval_list, feed_dict=feed_dict)
 
     def train_on_files(self, folder, ckpt_file):
@@ -238,7 +249,7 @@ class HaliteModel:
         i = 0
         epochs = 10
         for x in range(epochs):
-            for batch in data_gen(folder, 50):
+            for batch in data_gen(folder, 20):
                 t = time.time()
                 training_predictions, loss, _, accuracy = self.run_batch(
                     [self.predictions, self.loss, self.grad_update, self.accuracy], batch, True)

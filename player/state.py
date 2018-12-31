@@ -1,8 +1,11 @@
+import time
+import logging
 import numpy as np
 
 from player.hlt import positionals, constants
 from player.hlt import GameMap, MapCell, Position
 from player.constants import MAX_BOARD_SIZE, MOVE_TO_OUTPUT, FEATURE_SIZE
+from player.utils import Timer
 
 def pad_array(arr, dims, max_size):
     shape = arr.shape
@@ -30,46 +33,83 @@ class GameState:
         self.other_dropoffs = other_dropoffs #list
         self._map = None
 
+    @staticmethod
+    def from_game_map(game_map, turn_number, ships, other_ships, dropoffs, other_dropoffs):
+        state = GameState(turn_number, [], {}, ships, other_ships, dropoffs, other_dropoffs)
+        state._map = game_map
+        return state
+
     @property
     def game_map(self):
         if not self._map:
-            game_map = [[None for _ in range(self.map_size)] for _ in range(self.map_size)]
-            for y_position in range(self.map_size):
-                for x_position in range(self.map_size):
-                    game_map[y_position][x_position] = MapCell(Position(x_position, y_position),
-                                                               self.frame[y_position][x_position])
-            self._map = GameMap(game_map, self.map_size, self.map_size)
+            with Timer("Build Game Map"):
+                game_map = [[None for _ in range(self.map_size)] for _ in range(self.map_size)]
+                for y_position in range(self.map_size):
+                    for x_position in range(self.map_size):
+                        game_map[y_position][x_position] = MapCell(Position(x_position, y_position),
+                                                                   self.frame[y_position][x_position])
+                self._map = GameMap(game_map, self.map_size, self.map_size)
         return self._map
 
-    def get_feature_map(self):
-        feature_map = np.zeros((MAX_BOARD_SIZE, MAX_BOARD_SIZE, FEATURE_SIZE), dtype=np.float32)
-        # halite
-        for x in range(self.map_size):
-            for y in range(self.map_size):
-                feature_map[x][y][0] = self.frame[x][y]
-                #feature_map[x][y][1] = self.turn_number
-        #for ship_id, ship in self.ships.items():
-        #    feature_map[ship.position.x][ship.position.y][1] = ship.halite_amount / 1000.
-
-        #for ship_id, ship in self.other_ships.items():
-        #    feature_map[ship.position.x][ship.position.y][2] = ship.halite_amount / 1000.
-
-        #for dropoff in self.dropoffs:
-        #    feature_map[dropoff.position.x][dropoff.position.y][3] = 1
-        #for dropoff in self.other_dropoffs:
-        #    feature_map[dropoff.position.x][dropoff.position.y][4] = 1
-
-        return feature_map
-
     def get_features_for_ship(self, ship_id):
-        ship = self.ships[ship_id]
-        feature_map = np.zeros((MAX_BOARD_SIZE, MAX_BOARD_SIZE, FEATURE_SIZE), dtype=np.float32)
-        for y in range(MAX_BOARD_SIZE):
-            for x in range(MAX_BOARD_SIZE):
-                x_1 = (x + ship.position.x) % self.map_size
-                y_1 = (y + ship.position.y) % self.map_size
-                feature_map[y][x][0] = self.frame[y_1][x_1]
+        with Timer("Generate Features"):
+            ship = self.ships[ship_id]
+            feature_map = np.zeros((MAX_BOARD_SIZE, MAX_BOARD_SIZE, 45), dtype=np.float32)
+
+            ships = set([ x.position for x in self.ships.values()])
+            other_ships = set([ x.position for x in self.other_ships.values()])
+            dropoffs = set([ x.position for x in self.dropoffs])
+            other_dropoffs = set([ x.position for x in self.other_dropoffs])
+
+            for i, objs in enumerate([ships, other_ships, dropoffs, other_dropoffs]):
+                for y in range(self.map_size):
+                    for x in range(self.map_size):
+                        if Position(x=x, y=y) in objs:
+                            self._update_feature_map(feature_map, i, ship, x, y, 1)
+            i_base = 3
+            for y in range(self.map_size):
+                for x in range(self.map_size):
+                    h_amount = self.game_map[Position(x=x, y=y)].halite_amount
+                    for i, threshold in enumerate(range(0, 1000, 50)):
+                        if h_amount <= threshold:
+                            self._update_feature_map(feature_map, i+i_base, ship, x, y, 1)
+                    self._update_feature_map(feature_map, 23, ship, x, y, h_amount/1000.)
+            i_base = 24
+            for ship_id, our_ship in self.ships.items():
+                h_amount = our_ship.halite_amount
+                for i, threshold in enumerate(range(0, 1000, 50)):
+                    if h_amount >= threshold:
+                        self._update_feature_map(feature_map, i+i_base, ship, our_ship.position.x, our_ship.position.y, 1)
+                self._update_feature_map(feature_map, 44, ship, our_ship.position.x, our_ship.position.y, h_amount/1000.)
+
         return feature_map
+
+    def _get_toroid_coordinates(self, ship, x, y):
+        x_1 = int((x - ship.position.x) + (MAX_BOARD_SIZE/2)) % MAX_BOARD_SIZE
+        y_1 = int((y - ship.position.y) + (MAX_BOARD_SIZE/2)) % MAX_BOARD_SIZE
+
+        x_coords = [x_1]
+        y_coords = [y_1]
+
+        if x_1 >= self.map_size:
+            x_coords.append(x_1 - self.map_size)
+        if x_1 + self.map_size < MAX_BOARD_SIZE:
+            x_coords.append(x_1 + self.map_size)
+
+        if y_1 >= self.map_size:
+            y_coords.append(y_1 - self.map_size)
+        if y_1 + self.map_size < MAX_BOARD_SIZE:
+            y_coords.append(y_1 + self.map_size)
+
+        coords = []
+        for x_ in x_coords:
+            for y_ in y_coords:
+                coords.append((x_, y_))
+        return coords
+
+    def _update_feature_map(self, feature_map, feature_index, ship, x, y, feature_value):
+        for x_, y_ in self._get_toroid_coordinates(ship, x, y):
+            feature_map[y_][x_][feature_index] = feature_value
 
     # Generate the feature vector
     def input_for_ship(self, ship_id, rotation=0):

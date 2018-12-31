@@ -68,7 +68,7 @@ class Bot:
                 # Did not machine learn going back to base. Manually tell ships to return home
                 if ship.position == me.shipyard.position:
                     go_home[ship.id] = False
-                elif go_home[ship.id] or ship.halite_amount == 800:
+                elif go_home[ship.id] or ship.halite_amount >= 800:
                     go_home[ship.id] = True
                     movement = game_map.get_safe_move(game_map[ship.position], game_map[me.shipyard.position])
                     if movement is not None:
@@ -80,11 +80,13 @@ class Bot:
 
                 # Use machine learning to get a move
                 ml_move = predicted_moves.get(ship.id)
+                logging.warning(ml_move)
                 if ml_move is not None:
                     if ml_move != positionals.Direction.Still and ship.halite_amount < (game_map[ship.position].halite_amount/10):
                         ship.stay_still()
                         continue
                     if ml_move == positionals.Direction.Still and (game_map[ship.position].halite_amount == 0 or (game_map[ship.position].has_structure and ship.halite_amount == 0)):
+                        logging.warning("Choosing random direction for {}".format(ship.id))
                         ml_move = random.choice(DIRECTION_ORDER)
 
                     if ml_move != positionals.Direction.Still and self.is_dumb_move(game_map, ship, ml_move):
@@ -107,7 +109,7 @@ class Bot:
 
             # Spawn some more ships
             if me.halite_amount >= constants.SHIP_COST and \
-                    not game_map[me.shipyard].is_occupied and len(me.get_ships()) <= 4:
+                    not game_map[me.shipyard].is_occupied and len(me.get_ships()) < 7:
                 command_queue.append(self.game.me.shipyard.spawn())
 
             logging.warning("turn took {}".format(time.time() - turn_start))
