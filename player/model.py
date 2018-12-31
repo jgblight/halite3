@@ -193,42 +193,24 @@ class HaliteModel:
                 logging.warning('restoring model')
                 self.saver.restore(self.session, cached_model)
 
-
-    def predict_moves(self, game_map, me, other_players, turn_number):
-        my_ships = {s.id: s for s in me.get_ships()}
-        opp_ships = {s.id: s for p in other_players for s in p.get_ships()}
-        my_dropoffs = list(me.get_dropoffs()) + [me.shipyard]
-        opp_dropoffs = [d for p in other_players for d in p.get_dropoffs()] + \
-                       [p.shipyard for p in other_players]
-        frame = [[y.halite_amount for y in x] for x in game_map._cells]
-        game_state = GameState(turn_number, frame, {}, my_ships, opp_ships, my_dropoffs, opp_dropoffs)
-        ship_ids = game_state.ships.keys()
-        if not ship_ids:
-            return {}
+    def predict_move(self, game_state, ship_id):
         feature_list = []
-        for sid in ship_ids:
-            feature_list.append(game_state.get_features_for_ship(sid))
+        feature_list.append(game_state.feature_shift(ship_id))
         feature_map = np.stack(feature_list, axis=0)
-
 
         with Timer("Generate Prediction"):
             feed_dict = {self.x: feature_map, self.training: False}
-            logit, predictions = self.session.run([self.logits,self.predictions], feed_dict=feed_dict)
-        logging.warning(logit)
+            predictions = self.session.run([self.predictions], feed_dict=feed_dict)[0]
         _, moves = predictions
         move_dict = {}
         moves = np.ndarray.flatten(moves)
-        for i, sid in enumerate(ship_ids):
-            move_label = moves[i]
-            move_dict[sid] = MOVE_TO_DIRECTION[OUTPUT_TO_MOVE[move_label]]
-
-        return move_dict
+        return MOVE_TO_DIRECTION[OUTPUT_TO_MOVE[moves[0]]]
 
     def test_eval(self):
         batch = next(data_gen('../test', 1000))
         accuracy = self.run_batch([self.accuracy], batch, False)
         batch = next(data_gen('../test', 100))
-        logits, training_predictions = self.run_batch([self.logits, self.predictions], batch, False)
+        training_predictions = self.run_batch([self.predictions], batch, False)[0]
         print('Test Accuracy: {}'.format(accuracy))
         print(batch[1])
         print(logits)

@@ -10,6 +10,7 @@ from player import model
 from player.constants import DIRECTION_ORDER
 from player.hlt import constants
 from player.hlt import positionals
+from player.state import GameState
 
 
 class Bot:
@@ -42,6 +43,16 @@ class Bot:
             return True
         return False
 
+    def generate_state(self, game_map, me, other_players, turn_number):
+        my_ships = {s.id: s for s in me.get_ships()}
+        opp_ships = {s.id: s for p in other_players for s in p.get_ships()}
+        my_dropoffs = list(me.get_dropoffs()) + [me.shipyard]
+        opp_dropoffs = [d for p in other_players for d in p.get_dropoffs()] + \
+                       [p.shipyard for p in other_players]
+        frame = [[y.halite_amount for y in x] for x in game_map._cells]
+        return GameState(turn_number, frame, {}, my_ships, opp_ships, my_dropoffs, opp_dropoffs)
+
+
     def run(self):
         # Some minimal state to say when to go home
         go_home = defaultdict(lambda: False)
@@ -62,7 +73,7 @@ class Bot:
 
             command_queue = []
 
-            predicted_moves = self.my_model.predict_moves(game_map, me, other_players, self.game.turn_number)
+            state = self.generate_state(game_map, me, other_players, self.game.turn_number)
 
             for ship in me.get_ships():  # For each of our ships
                 # Did not machine learn going back to base. Manually tell ships to return home
@@ -79,14 +90,14 @@ class Bot:
                     continue
 
                 # Use machine learning to get a move
-                ml_move = predicted_moves.get(ship.id)
-                logging.warning(ml_move)
+                ml_move = self.my_model.predict_move(state, ship.id)
+                #logging.warning(ml_move)
                 if ml_move is not None:
                     if ml_move != positionals.Direction.Still and ship.halite_amount < (game_map[ship.position].halite_amount/10):
                         ship.stay_still()
                         continue
                     if ml_move == positionals.Direction.Still and (game_map[ship.position].halite_amount == 0 or (game_map[ship.position].has_structure and ship.halite_amount == 0)):
-                        logging.warning("Choosing random direction for {}".format(ship.id))
+                        #logging.warning("Choosing random direction for {}".format(ship.id))
                         ml_move = random.choice(DIRECTION_ORDER)
 
                     if ml_move != positionals.Direction.Still and self.is_dumb_move(game_map, ship, ml_move):
@@ -112,5 +123,5 @@ class Bot:
                     not game_map[me.shipyard].is_occupied and len(me.get_ships()) < 7:
                 command_queue.append(self.game.me.shipyard.spawn())
 
-            logging.warning("turn took {}".format(time.time() - turn_start))
+            #logging.warning("turn took {}".format(time.time() - turn_start))
             self.game.end_turn(command_queue)  # Send our moves back to the game environment

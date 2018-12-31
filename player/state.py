@@ -32,6 +32,7 @@ class GameState:
         self.dropoffs = dropoffs #list
         self.other_dropoffs = other_dropoffs #list
         self._map = None
+        self._feature_map = None
 
     @staticmethod
     def from_game_map(game_map, turn_number, ships, other_ships, dropoffs, other_dropoffs):
@@ -81,8 +82,52 @@ class GameState:
                     if h_amount >= threshold:
                         self._update_feature_map(feature_map, i+i_base, ship, our_ship.position.x, our_ship.position.y, 1)
                 self._update_feature_map(feature_map, 44, ship, our_ship.position.x, our_ship.position.y, h_amount/1000.)
-
         return feature_map
+
+    @property
+    def feature_map(self):
+        if self._feature_map is None:
+            with Timer("Generate Feature Map"):
+                feature_map = np.zeros((self.map_size, self.map_size, 45), dtype=np.float32)
+
+                ships = set([ x.position for x in self.ships.values()])
+                other_ships = set([ x.position for x in self.other_ships.values()])
+                dropoffs = set([ x.position for x in self.dropoffs])
+                other_dropoffs = set([ x.position for x in self.other_dropoffs])
+
+                for i, objs in enumerate([ships, other_ships, dropoffs, other_dropoffs]):
+                    for y in range(self.map_size):
+                        for x in range(self.map_size):
+                            if Position(x=x, y=y) in objs:
+                                feature_map[y][x][i] = 1
+                i_base = 3
+                for y in range(self.map_size):
+                    for x in range(self.map_size):
+                        h_amount = self.game_map[Position(x=x, y=y)].halite_amount
+                        for i, threshold in enumerate(range(0, 1000, 50)):
+                            if h_amount <= threshold:
+                                feature_map[y][x][i+i_base] = 1
+                        feature_map[y][x][23] = h_amount/1000.
+                i_base = 24
+                for ship_id, our_ship in self.ships.items():
+                    h_amount = our_ship.halite_amount
+                    for i, threshold in enumerate(range(0, 1000, 50)):
+                        if h_amount >= threshold:
+                            feature_map[our_ship.position.y][our_ship.position.x][i+i_base] = 1
+                    feature_map[our_ship.position.y][our_ship.position.x][44] = h_amount/1000.
+                if self.map_size == MAX_BOARD_SIZE:
+                    self._feature_map = feature_map
+                else:
+                    self._feature_map = np.tile(feature_map, (2, 2, 1))
+        return self._feature_map
+
+    def feature_shift(self, ship_id):
+        ship = self.ships[ship_id]
+        shift_x = int(MAX_BOARD_SIZE/2) - ship.position.x
+        shift_y = int(MAX_BOARD_SIZE/2) - ship.position.y
+
+        rolled = np.roll(self.feature_map, shift=(shift_y, shift_x), axis=(0,1))
+        return rolled[:MAX_BOARD_SIZE,:MAX_BOARD_SIZE,:]
 
     def _get_toroid_coordinates(self, ship, x, y):
         x_1 = int((x - ship.position.x) + (MAX_BOARD_SIZE/2)) % MAX_BOARD_SIZE

@@ -11,4 +11,4 @@ class Timer:
 
     def __exit__(self, type, value, traceback):
         end_time = time.time()
-        logging.warning("{} took {}".format(self.timer_string, end_time - self.start_time))
+        #logging.warning("{} took {}".format(self.timer_string, end_time - self.start_time))
