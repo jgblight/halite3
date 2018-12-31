@@ -11,24 +11,24 @@ from player.constants import DIRECTION_ORDER
 from player.hlt import constants
 from player.hlt import positionals
 from player.state import GameState
+from player.utils import Timer, log_message
 
 
 class Bot:
     def __init__(self, name, ckpt_file):
-        logging.warning('initializing model')
-        # During init phase: initialize the model and compile it
-        my_model = model.HaliteModel(cached_model=ckpt_file)
+        with Timer("start game"):
+            # During init phase: initialize the model and compile it
+            with Timer('Initialize Model'):
+                my_model = model.HaliteModel(cached_model=ckpt_file)
 
-        # Get the initial game state
-        logging.warning('intializing game')
-        game = hlt.Game()
-        game.ready(name)
+            # Get the initial game state
+            game = hlt.Game()
+            self.my_model = my_model
+            self.game = game
+            self.last_move = {}
+            self.avoid = set()
 
-        logging.warning("bot initialized")
-        self.my_model = my_model
-        self.game = game
-        self.last_move = {}
-        self.avoid = set()
+            game.ready(name)
 
     def is_dumb_move(self, game_map, ship, ml_move):
         destination = ship.position.directional_offset(ml_move)
@@ -56,10 +56,9 @@ class Bot:
     def run(self):
         # Some minimal state to say when to go home
         go_home = defaultdict(lambda: False)
-        logging.warning("beginning game")
         while True:
             self.game.update_frame()
-            logging.warning("turn {}".format(self.game.turn_number))
+            #logging.warning("turn {}".format(self.game.turn_number))
             turn_start = time.time()
             me = self.game.me  # Here we extract our player metadata from the game state
             game_map = self.game.game_map  # And here we extract the map metadata
@@ -90,7 +89,7 @@ class Bot:
                     continue
 
                 # Use machine learning to get a move
-                ml_move = self.my_model.predict_move(state, ship.id)
+                ml_move, backup = self.my_model.predict_move(state, ship.id)
                 #logging.warning(ml_move)
                 if ml_move is not None:
                     if ml_move != positionals.Direction.Still and ship.halite_amount < (game_map[ship.position].halite_amount/10):
@@ -98,7 +97,7 @@ class Bot:
                         continue
                     if ml_move == positionals.Direction.Still and (game_map[ship.position].halite_amount == 0 or (game_map[ship.position].has_structure and ship.halite_amount == 0)):
                         #logging.warning("Choosing random direction for {}".format(ship.id))
-                        ml_move = random.choice(DIRECTION_ORDER)
+                        ml_move = backup
 
                     if ml_move != positionals.Direction.Still and self.is_dumb_move(game_map, ship, ml_move):
                         i = DIRECTION_ORDER.index(ml_move)
@@ -120,7 +119,7 @@ class Bot:
 
             # Spawn some more ships
             if me.halite_amount >= constants.SHIP_COST and \
-                    not game_map[me.shipyard].is_occupied and len(me.get_ships()) < 7:
+                    not game_map[me.shipyard].is_occupied and len(me.get_ships()) < 14:
                 command_queue.append(self.game.me.shipyard.spawn())
 
             #logging.warning("turn took {}".format(time.time() - turn_start))

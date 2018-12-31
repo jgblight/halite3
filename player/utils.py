@@ -1,5 +1,12 @@
+import os
 import time
 import logging
+
+VERBOSE_LOGGING = os.environ.get('VERBOSE_LOGGING')
+
+def log_message(message):
+    if VERBOSE_LOGGING:
+        logging.warning(message)
 
 class Timer:
 
@@ -11,4 +18,4 @@ class Timer:
 
     def __exit__(self, type, value, traceback):
         end_time = time.time()
-        #logging.warning("{} took {}".format(self.timer_string, end_time - self.start_time))
+        log_message("{} took {}".format(self.timer_string, end_time - self.start_time))

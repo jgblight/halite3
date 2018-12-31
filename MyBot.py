@@ -1,8 +1,9 @@
 import logging
 from player.bot import Bot
+import os
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 if __name__ == '__main__':
-    logging.warning('initializing bot')
     bot = Bot('bot', 'models/model_82000.ckpt')
-    logging.warning('initialized')
     bot.run()

@@ -8,4 +8,5 @@ def send_commands(commands):
     :return: nothing.
     """
     print(" ".join(commands))
+    sys.stderr.flush()
     sys.stdout.flush()

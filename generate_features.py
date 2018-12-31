@@ -30,7 +30,7 @@ def process_file(i, filename, output_folder):
         map_size = state.map_size
         for ship_id, move_label in moves:
             move_id = MOVE_TO_OUTPUT[move_label]
-            features = state.get_features_for_ship(ship_id)
+            features = state.feature_shift(ship_id)
             output_file = '{}_{}_{}.pkl'.format(i, j, ship_id)
             payload = (map_size, OUTPUT_TO_MOVE[move_id], features)
             with open(os.path.join(output_folder, output_file),'wb') as f:

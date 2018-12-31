@@ -112,12 +112,10 @@ class HaliteModel:
         self.learning_rate = 0.001
         self.batch_size = 10
 
-        logging.warning("creating session")
         self.graph = tf.Graph()
         with self.graph.as_default():
             self.session = tf.Session()
 
-            logging.warning("creating placeholders")
             # Build network
             # Input placeholder
             self.x = tf.placeholder(tf.float32, [None, self.h, self.w, FEATURE_SIZE])
@@ -142,7 +140,6 @@ class HaliteModel:
                 'training': self.training,
             }
 
-            logging.warning("creating graph")
             start = time.time()
 
             x_norm = tf.layers.batch_normalization(self.x, training=self.training)
@@ -178,7 +175,7 @@ class HaliteModel:
             self.logits = slim.fully_connected(inputs=fc5,
                                              num_outputs=OUTPUT_SIZE,
                                              activation_fn=None)
-            self.predictions = tf.nn.top_k(self.logits)
+            self.predictions = tf.nn.top_k(self.logits, 2)
             self.xentropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.y, logits=self.logits)
             self.loss = tf.reduce_mean(self.xentropy)
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -190,7 +187,6 @@ class HaliteModel:
             if cached_model is None:
                 self.session.run(tf.global_variables_initializer())
             else:
-                logging.warning('restoring model')
                 self.saver.restore(self.session, cached_model)
 
     def predict_move(self, game_state, ship_id):
@@ -204,7 +200,7 @@ class HaliteModel:
         _, moves = predictions
         move_dict = {}
         moves = np.ndarray.flatten(moves)
-        return MOVE_TO_DIRECTION[OUTPUT_TO_MOVE[moves[0]]]
+        return [MOVE_TO_DIRECTION[OUTPUT_TO_MOVE[x]] for x in moves]
 
     def test_eval(self):
         batch = next(data_gen('../test', 1000))
