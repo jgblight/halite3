@@ -39,6 +39,7 @@ def parse_replay_data(data, player_name):
         for p in data['players'] if int(p['player_id']) != player_id]
     width = data['production_map']['width']
     height = data['production_map']['height']
+    max_turns = data['GAME_CONSTANTS']['MAX_TURNS']
     first_cells = []
     for y in range(len(data['production_map']['grid'])):
         row = []
@@ -65,10 +66,14 @@ def parse_replay_data(data, player_name):
     first_them_dropoffs = other_shipyards
     my_dropoffs = []
     them_dropoffs = []
+    spawns = []
     for f in data['full_frames']:
         new_my_dropoffs = copy.deepcopy(first_my_dropoffs if len(my_dropoffs) == 0 else my_dropoffs[-1])
         new_them_dropoffs = copy.deepcopy(first_them_dropoffs if len(them_dropoffs) == 0 else them_dropoffs[-1])
+        spawn = False
         for e in f['events']:
+            if e['type'] == 'spawn' and int(e['owner_id']) == player_id:
+                spawn = True
             if e['type'] == 'construct':
                 if int(e['owner_id']) == player_id:
                     new_my_dropoffs.append(
@@ -78,7 +83,10 @@ def parse_replay_data(data, player_name):
                         hlt.Dropoff(e['owner_id'], ARBITRARY_ID, hlt.Position(e['location']['x'], e['location']['y'])))
         my_dropoffs.append(new_my_dropoffs)
         them_dropoffs.append(new_them_dropoffs)
-    return [ GameState(*args) for args in zip(range(len(data['full_frames'])), frames, moves, ships, other_ships, my_dropoffs, them_dropoffs) ]
+        spawns.append(spawn)
+
+    turns = [ float(x)/max_turns for x in range(len(data['full_frames']))]
+    return [ GameState(*args) for args in zip(turns, frames, moves, ships, other_ships, my_dropoffs, them_dropoffs, spawns) ]
 
 
 def parse_replay_folder(folder_name, max_files=None):

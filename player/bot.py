@@ -19,7 +19,7 @@ class Bot:
         with Timer("start game"):
             # During init phase: initialize the model and compile it
             with Timer('Initialize Model'):
-                my_model = model.HaliteModel(cached_model=ckpt_file)
+                my_model = model.MovementModel(cached_model=ckpt_file)
 
             # Get the initial game state
             game = hlt.Game()
@@ -50,7 +50,7 @@ class Bot:
         opp_dropoffs = [d for p in other_players for d in p.get_dropoffs()] + \
                        [p.shipyard for p in other_players]
         frame = [[y.halite_amount for y in x] for x in game_map._cells]
-        return GameState(turn_number, frame, {}, my_ships, opp_ships, my_dropoffs, opp_dropoffs)
+        return GameState(float(turn_number)/constants.MAX_TURNS, frame, {}, my_ships, opp_ships, my_dropoffs, opp_dropoffs)
 
 
     def run(self):

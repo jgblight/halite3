@@ -1,7 +1,7 @@
 from player.hlt import positionals
 
 MAX_BOARD_SIZE = 64
-FEATURE_SIZE = 45
+FEATURE_SIZE = 46
 OUTPUT_SIZE = 5
 
 DIRECTION_ORDER = [positionals.Direction.West,

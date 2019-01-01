@@ -14,9 +14,6 @@ from player.utils import Timer
 
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
-from tensorflow.python.ops import array_ops
-from tensorflow.python.ops import math_ops
-from tensorflow.contrib.rnn import GRUCell
 
 def train_test_split(folder, data_size, split=0.2):
     files = np.array(sorted([ os.path.join(folder, f) for f in os.listdir(folder)]))
@@ -26,12 +23,7 @@ def train_test_split(folder, data_size, split=0.2):
     train_indices = indices[test_size:data_size]
     return files[train_indices], files[test_indices]
 
-def randomize_order(folder):
-    files = np.array(glob.glob(os.path.join(folder, '*.pkl')))
-    random_files = np.random.permutation(files)
-
-
-def data_gen(folder, batch_size):
+def data_gen(folder, batch_size, parse_file):
     files = np.array(sorted([ os.path.join(folder, f) for f in os.listdir(folder)]))
     random_files = np.random.permutation(files)
     for start in range(0, len(random_files), batch_size):
@@ -39,33 +31,13 @@ def data_gen(folder, batch_size):
         batch = random_files[start:end]
         feature_list = []
         move_list = []
-        size_list = []
         for filename in batch:
             with open(filename, 'rb') as f:
-                map_size, move, features = pickle.load(f)
-            size_list.append(map_size)
+                move, features = parse_file(f)
             feature_list.append(features)
-            move_list.append(MOVE_TO_OUTPUT[move])
+            move_list.append(move)
         feature_arr = np.stack(feature_list, axis=0)
-        yield size_list, np.array(move_list), feature_arr
-
-
-def one_hot(arr, depth):
-    arr_len = arr.shape[0]
-    oneh = np.zeros((arr_len,depth))
-    oneh[np.arange(arr_len), arr.astype(int)] = 1
-    return oneh
-
-def generate_weights(training_files):
-    counts = np.zeros((OUTPUT_SIZE,))
-    for i, training_file in enumerate(training_files):
-        for data in data_gen(training_file, 100):
-            _, _, mask, moves = data
-            move_logits = moves[mask[:,0], mask[:,1], mask[:,2]]
-            weights = np.sum(one_hot(move_logits, OUTPUT_SIZE),axis=0)
-            counts += weights
-    counts = np.sum(counts) / counts
-    return counts
+        yield np.array(move_list), feature_arr
 
 def new_conv_layer(input, num_input_channels, filter_size, num_filters, name):
 
@@ -105,12 +77,12 @@ def new_relu_layer(input, name):
 
 class HaliteModel:
 
-    def __init__(self, cached_model=None):
-        self.h = MAX_BOARD_SIZE
-        self.w = MAX_BOARD_SIZE
-        self.hidden_size = 50
+    def __init__(self, categories, cached_model=None, train_folder=None, test_folder=None):
         self.learning_rate = 0.001
-        self.batch_size = 10
+        self.batch_size = 20
+        self.categories = categories
+        self.train_folder = train_folder
+        self.test_folder = test_folder
 
         self.graph = tf.Graph()
         with self.graph.as_default():
@@ -118,11 +90,10 @@ class HaliteModel:
 
             # Build network
             # Input placeholder
-            self.x = tf.placeholder(tf.float32, [None, self.h, self.w, FEATURE_SIZE])
+            self.x = tf.placeholder(tf.float32, [None, MAX_BOARD_SIZE, MAX_BOARD_SIZE, FEATURE_SIZE])
             #self.x = tf.placeholder(tf.float32, [None, 83])
             # Output placeholder
             self.y = tf.placeholder(tf.int32, [None])
-            self.mask = tf.placeholder(tf.int32, [None, 3])
             self.training = tf.placeholder(tf.bool)
 
             conv1_fmaps = 30
@@ -173,7 +144,7 @@ class HaliteModel:
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
 
             self.logits = slim.fully_connected(inputs=fc5,
-                                             num_outputs=OUTPUT_SIZE,
+                                             num_outputs=self.categories,
                                              activation_fn=None)
             self.predictions = tf.nn.top_k(self.logits, 2)
             self.xentropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.y, logits=self.logits)
@@ -189,6 +160,45 @@ class HaliteModel:
             else:
                 self.saver.restore(self.session, cached_model)
 
+    def test_eval(self):
+        batch = next(data_gen(self.test_folder, 1000, self.parse_file))
+        accuracy = self.run_batch([self.accuracy], batch, False)
+        batch = next(data_gen(self.test_folder, 100, self.parse_file))
+        training_predictions = self.run_batch([self.predictions], batch, False)[0]
+        print('Test Accuracy: {}'.format(accuracy))
+        print(batch[0])
+        print(np.ndarray.flatten(training_predictions[1]))
+
+    def run_batch(self, eval_list, batch, training):
+        moves, features = batch
+        feed_dict = {self.x: features, self.y:moves, self.training: training}
+        return self.session.run(eval_list, feed_dict=feed_dict)
+
+    def train_on_files(self, ckpt_file):
+        map_size = 0
+        i = 0
+        epochs = 10
+        for x in range(epochs):
+            for batch in data_gen(self.train_folder, self.batch_size, self.parse_file):
+                t = time.time()
+                training_predictions, loss, _, accuracy = self.run_batch(
+                    [self.predictions, self.loss, self.grad_update, self.accuracy], batch, True)
+                i += 1
+                if not (i % 1000):
+                    print("Training Loss: {}".format(loss))
+                    self.test_eval()
+                    self.saver.save(self.session, ckpt_file.format(i))
+
+
+class MovementModel(HaliteModel):
+
+    def __init__(self, cached_model=None, train_folder=None, test_folder=None):
+        super(MovementModel, self).__init__(OUTPUT_SIZE, cached_model, train_folder, test_folder)
+
+    def parse_file(self, handle):
+        _, move, features = pickle.load(handle)
+        return MOVE_TO_OUTPUT[move], features
+
     def predict_move(self, game_state, ship_id):
         feature_list = []
         feature_list.append(game_state.feature_shift(ship_id))
@@ -202,41 +212,23 @@ class HaliteModel:
         moves = np.ndarray.flatten(moves)
         return [MOVE_TO_DIRECTION[OUTPUT_TO_MOVE[x]] for x in moves]
 
-    def test_eval(self):
-        batch = next(data_gen('../test', 1000))
-        accuracy = self.run_batch([self.accuracy], batch, False)
-        batch = next(data_gen('../test', 100))
-        training_predictions = self.run_batch([self.predictions], batch, False)[0]
-        print('Test Accuracy: {}'.format(accuracy))
-        print(batch[1])
-        print(logits)
-        print(np.ndarray.flatten(training_predictions[1]))
+class SpawnModel(HaliteModel):
 
-    def run_batch(self, eval_list, batch, training):
-        weights = np.array([0.1,1,1,1,1])
-        size_list, moves, features = batch
-        sequence_lengths1 = []
-        for map_size in size_list:
-            sequence_lengths1 += [ map_size for i in range(MAX_BOARD_SIZE)]
-        sequence_lengths2 = np.array(size_list)
-        feed_dict = {self.x: features, self.y:moves, self.training: training}
-        return self.session.run(eval_list, feed_dict=feed_dict)
+    def __init__(self, cached_model=None, train_folder=None, test_folder=None):
+        super(SpawnModel, self).__init__(OUTPUT_SIZE, cached_model, train_folder, test_folder)
 
-    def train_on_files(self, folder, ckpt_file):
-        map_size = 0
-        i = 0
-        epochs = 10
-        for x in range(epochs):
-            for batch in data_gen(folder, 20):
-                t = time.time()
-                training_predictions, loss, _, accuracy = self.run_batch(
-                    [self.predictions, self.loss, self.grad_update, self.accuracy], batch, True)
-                #print('--- {} ---'.format(time.time() - t))
-                #print(batch[1])
-                #print(np.ndarray.flatten(training_predictions[1]))
-                #print('Accuracy: {}'.format(accuracy))
-                i += 1
-                if not (i % 1000):
-                    print("Training Loss: {}".format(loss))
-                    self.test_eval()
-                    self.saver.save(self.session, ckpt_file.format(i))
+    def parse_file(self, handle):
+        move, features = pickle.load(handle)
+        return int(move), features
+
+    def predict(self, game_state):
+        feature_list = []
+        feature_list.append(game_state.center_shift())
+        feature_map = np.stack(feature_list, axis=0)
+
+        with Timer("Generate Prediction"):
+            feed_dict = {self.x: feature_map, self.training: False}
+            predictions = self.session.run([self.predictions], feed_dict=feed_dict)[0]
+        _, moves = predictions
+        moves = np.ndarray.flatten(moves)
+        return bool(moves[0])

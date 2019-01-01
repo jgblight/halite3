@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 
-from player.model import HaliteModel
+from player.model import MovementModel, SpawnModel
 
-m = HaliteModel()
-m.train_on_files('../train', 'models/model_{}.ckpt')
-#m.save(file_name='aggressive.svc')
+if __name__ == '__main__':
 
-#m = model.HaliteModel()
-#m.train_on_files('training', 'passive')
-#m.save(file_name='passive.svc')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('job', choices=['movement', 'spawn'])
+    args = parser.parse_args()
+
+    if args.job == 'movement':
+        m = MovementModel(train_folder='../train', test_folder='../test')
+        m.train_on_files('models/model_{}.ckpt')
+    elif args.job == 'spawn':
+        m = SpawnModel(train_folder='../spawn_train', test_folder='../spawn_test')
+        m.train_on_files('models/spawn_model_{}.ckpt')
