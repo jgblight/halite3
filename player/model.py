@@ -1,16 +1,11 @@
 import os
-import glob
 import time
-import gc
-import logging
 import pickle
 
 import numpy as np
-from player.parse import parse_winner, parse_replay_file
-from player.ndlstm import separable_lstm2
 from player.state import GameState
 from player.constants import MAX_BOARD_SIZE, FEATURE_SIZE, OUTPUT_SIZE, MOVE_TO_DIRECTION, OUTPUT_TO_MOVE, MOVE_TO_OUTPUT
-from player.utils import Timer
+from player.utils import Timer, log_message
 
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
@@ -152,7 +147,7 @@ class HaliteModel:
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
             with tf.control_dependencies(update_ops):
                 self.grad_update = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
-            self.accuracy = tf.reduce_mean(tf.cast(tf.nn.in_top_k(self.logits, self.y, 2), tf.float32))
+            self.accuracy = tf.reduce_mean(tf.cast(tf.nn.in_top_k(self.logits, self.y, 1), tf.float32))
             self.saver = tf.train.Saver()
 
             if cached_model is None:
@@ -167,7 +162,7 @@ class HaliteModel:
         training_predictions = self.run_batch([self.predictions], batch, False)[0]
         print('Test Accuracy: {}'.format(accuracy))
         print(batch[0])
-        print(np.ndarray.flatten(training_predictions[1]))
+        print(training_predictions[1][:,0])
 
     def run_batch(self, eval_list, batch, training):
         moves, features = batch
@@ -215,7 +210,7 @@ class MovementModel(HaliteModel):
 class SpawnModel(HaliteModel):
 
     def __init__(self, cached_model=None, train_folder=None, test_folder=None):
-        super(SpawnModel, self).__init__(OUTPUT_SIZE, cached_model, train_folder, test_folder)
+        super(SpawnModel, self).__init__(2, cached_model, train_folder, test_folder)
 
     def parse_file(self, handle):
         move, features = pickle.load(handle)
@@ -229,6 +224,7 @@ class SpawnModel(HaliteModel):
         with Timer("Generate Prediction"):
             feed_dict = {self.x: feature_map, self.training: False}
             predictions = self.session.run([self.predictions], feed_dict=feed_dict)[0]
+            log_message(predictions)
         _, moves = predictions
         moves = np.ndarray.flatten(moves)
         return bool(moves[0])

@@ -42,8 +42,7 @@ def process_movement(i, filename, output_folder):
     return filename
 
 def process_spawn(i, filename, output_folder):
-    for j, state in enumerate(get_states(i, filename, 50, 50)):
-
+    for j, state in enumerate(get_states(i, filename, 100, 100)):
         features = state.center_shift()
         output_file = '{}_{}.pkl'.format(i, j)
         payload = (state.spawn, features)

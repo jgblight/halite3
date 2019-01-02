@@ -5,25 +5,24 @@ from collections import defaultdict
 import random
 import time
 
-from player import hlt
-from player import model
+from player.model import MovementModel, SpawnModel
 from player.constants import DIRECTION_ORDER
-from player.hlt import constants
-from player.hlt import positionals
+from player.hlt import constants, positionals, Game
 from player.state import GameState
 from player.utils import Timer, log_message
 
 
 class Bot:
-    def __init__(self, name, ckpt_file):
+    def __init__(self, name, ckpt_file, spawn_ckpt):
         with Timer("start game"):
             # During init phase: initialize the model and compile it
             with Timer('Initialize Model'):
-                my_model = model.MovementModel(cached_model=ckpt_file)
+                my_model = MovementModel(cached_model=ckpt_file)
 
             # Get the initial game state
-            game = hlt.Game()
+            game = Game()
             self.my_model = my_model
+            #self.spawn_model = SpawnModel(cached_model=spawn_ckpt)
             self.game = game
             self.last_move = {}
             self.avoid = set()
@@ -57,8 +56,8 @@ class Bot:
         # Some minimal state to say when to go home
         go_home = defaultdict(lambda: False)
         while True:
+            logging.warning("turn {}".format(self.game.turn_number))
             self.game.update_frame()
-            #logging.warning("turn {}".format(self.game.turn_number))
             turn_start = time.time()
             me = self.game.me  # Here we extract our player metadata from the game state
             game_map = self.game.game_map  # And here we extract the map metadata
@@ -74,18 +73,28 @@ class Bot:
 
             state = self.generate_state(game_map, me, other_players, self.game.turn_number)
 
-            for ship in me.get_ships():  # For each of our ships
+            for ship in sorted(me.get_ships(), key=lambda x: x.halite_amount, reverse=True):  # For each of our ships
                 # Did not machine learn going back to base. Manually tell ships to return home
                 if ship.position == me.shipyard.position:
                     go_home[ship.id] = False
-                elif go_home[ship.id] or ship.halite_amount >= 800:
+                elif go_home[ship.id] or ship.halite_amount >= 900 or (constants.MAX_TURNS - self.game.turn_number  <= 25 and ship.halite_amount > 0):
                     go_home[ship.id] = True
+
                     movement = game_map.get_safe_move(game_map[ship.position], game_map[me.shipyard.position])
                     if movement is not None:
                         game_map[ship.position.directional_offset(movement)].mark_unsafe(ship)
                         command_queue.append(ship.move(movement))
                     else:
-                        ship.stay_still()
+                        bulldoze = False
+                        if (constants.MAX_TURNS - self.game.turn_number  <= 25 and ship.halite_amount > 0):
+                            for direction in game_map.get_unsafe_moves(ship.position, me.shipyard.position):
+                                target_pos = ship.position.directional_offset(direction)
+                                if target_pos == me.shipyard.position:
+                                    bulldoze = True
+                                    command_queue.append(ship.move(direction))
+                                    break
+                        if not bulldoze:
+                            ship.stay_still()
                     continue
 
                 # Use machine learning to get a move
@@ -118,8 +127,8 @@ class Bot:
                 ship.stay_still()
 
             # Spawn some more ships
-            if me.halite_amount >= constants.SHIP_COST and \
-                    not game_map[me.shipyard].is_occupied and len(me.get_ships()) < 14:
+            if me.halite_amount >= constants.SHIP_COST and self.game.turn_number <= constants.MAX_TURNS/2:
+                #if self.spawn_model.predict(state):
                 command_queue.append(self.game.me.shipyard.spawn())
 
             #logging.warning("turn took {}".format(time.time() - turn_start))
