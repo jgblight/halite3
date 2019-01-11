@@ -31,8 +31,7 @@ class Bot:
 
     def is_dumb_move(self, game_map, ship, ml_move):
         destination = ship.position.directional_offset(ml_move)
-        if not game_map.get_safe_move(game_map[ship.position],
-                                          game_map[destination]):
+        if game_map[destination].is_occupied:
             return True
 
         if destination in self.avoid:
@@ -79,14 +78,15 @@ class Bot:
                     go_home[ship.id] = False
                 elif go_home[ship.id] or ship.halite_amount >= 900 or (constants.MAX_TURNS - self.game.turn_number  <= 25 and ship.halite_amount > 0):
                     go_home[ship.id] = True
-
                     movement = game_map.get_safe_move(game_map[ship.position], game_map[me.shipyard.position])
                     if movement is not None:
+                        game_map[ship.position].mark_safe()
                         game_map[ship.position.directional_offset(movement)].mark_unsafe(ship)
                         command_queue.append(ship.move(movement))
                     else:
                         bulldoze = False
-                        if (constants.MAX_TURNS - self.game.turn_number  <= 25 and ship.halite_amount > 0):
+                        has_asshole = game_map[me.shipyard.position].is_occupied and game_map[me.shipyard.position].ship.owner != me.id
+                        if (constants.MAX_TURNS - self.game.turn_number  <= 25 and ship.halite_amount > 0) or has_asshole:
                             for direction in game_map.get_unsafe_moves(ship.position, me.shipyard.position):
                                 target_pos = ship.position.directional_offset(direction)
                                 if target_pos == me.shipyard.position:
@@ -120,6 +120,7 @@ class Bot:
                                                       game_map[ship.position.directional_offset(ml_move)])
                     if movement is not None:
                         cell = game_map[ship.position.directional_offset(movement)]
+                        game_map[ship.position].mark_safe()
                         cell.mark_unsafe(ship)
                         self.last_move[ship.id] = ship.position
                         command_queue.append(ship.move(movement))

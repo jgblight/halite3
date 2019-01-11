@@ -6,6 +6,7 @@ import queue
 
 from . import commands, networking, constants
 from .positionals import Direction, Position
+from .navigation import djikstra_traverse
 
 
 class Entity(abc.ABC):
@@ -266,6 +267,9 @@ class MapCell:
         """
         return None if not self.structure else type(self.structure)
 
+    def mark_safe(self):
+        self.ship = None
+
     def mark_unsafe(self, ship):
         """
         Mark this cell as unsafe (occupied) for navigation.
@@ -437,15 +441,11 @@ class GameMap:
         if source == destination:
             return None
 
-        visited_map = self._bfs_traverse_safely(source, destination)
-        if not visited_map:
-            return self._naive_navigate(source.position, destination.position)
-
-        safe_target_cell = self._find_first_move(source, destination, visited_map)
-        if not safe_target_cell:
+        target_cell = djikstra_traverse(self, source, destination)
+        if not target_cell or target_cell.is_occupied:
             return None
 
-        potential_moves = self.get_unsafe_moves(source.position, safe_target_cell.position)
+        potential_moves = self.get_unsafe_moves(source.position, target_cell.position)
         if not potential_moves:
             return None
 

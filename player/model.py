@@ -2,13 +2,22 @@ import os
 import time
 import pickle
 
-import numpy as np
-from player.state import GameState
-from player.constants import MAX_BOARD_SIZE, FEATURE_SIZE, OUTPUT_SIZE, MOVE_TO_DIRECTION, OUTPUT_TO_MOVE, MOVE_TO_OUTPUT
 from player.utils import Timer, log_message
 
-import tensorflow as tf
-import tensorflow.contrib.slim as slim
+with Timer("halite import", True):
+    from player.state import GameState
+    from player.constants import MAX_BOARD_SIZE, FEATURE_SIZE, OUTPUT_SIZE, MOVE_TO_DIRECTION, OUTPUT_TO_MOVE, MOVE_TO_OUTPUT
+
+with Timer("numpy import", True):
+    import numpy as np
+
+with Timer("tf import", True):
+    import tensorflow as tf
+
+from player.tf_contrib_copy import fully_connected, variance_scaling_initializer
+
+#with Timer("slim import", True):
+#    import tensorflow.contrib.slim as slim
 
 def train_test_split(folder, data_size, split=0.2):
     files = np.array(sorted([ os.path.join(folder, f) for f in os.listdir(folder)]))
@@ -101,7 +110,7 @@ class HaliteModel:
             conv3_ksize = 5
             dropout_rate = 0.20
 
-            he_init = tf.contrib.layers.variance_scaling_initializer()
+            he_init = variance_scaling_initializer()
             bn_params = {
                 'training': self.training,
             }
@@ -123,22 +132,22 @@ class HaliteModel:
 
             flat = tf.layers.flatten(relu3)
 
-            fc1 = tf.contrib.layers.fully_connected(inputs=flat, num_outputs=50,
+            fc1 = fully_connected(inputs=flat, num_outputs=50,
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
             d1 = tf.layers.dropout(inputs=fc1, rate=dropout_rate, training=self.training)
-            fc2 = tf.contrib.layers.fully_connected(inputs=d1, num_outputs=40,
+            fc2 = fully_connected(inputs=d1, num_outputs=40,
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
             d2 = tf.layers.dropout(inputs=fc1, rate=dropout_rate, training=self.training)
-            fc3 = tf.contrib.layers.fully_connected(inputs=d2, num_outputs=30,
+            fc3 = fully_connected(inputs=d2, num_outputs=30,
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
             d3 = tf.layers.dropout(inputs=fc1, rate=dropout_rate, training=self.training)
-            fc4 = tf.contrib.layers.fully_connected(inputs=d3, num_outputs=20,
+            fc4 = fully_connected(inputs=d3, num_outputs=20,
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
             d4 = tf.layers.dropout(inputs=fc1, rate=dropout_rate, training=self.training)
-            fc5 = tf.contrib.layers.fully_connected(inputs=d4, num_outputs=10,
+            fc5 = fully_connected(inputs=d4, num_outputs=10,
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
 
-            self.logits = slim.fully_connected(inputs=fc5,
+            self.logits = fully_connected(inputs=fc5,
                                              num_outputs=self.categories,
                                              activation_fn=None)
             self.predictions = tf.nn.top_k(self.logits, 2)
