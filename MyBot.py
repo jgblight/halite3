@@ -5,5 +5,5 @@ with Timer("Import", True):
     #os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
     from player.bot import Bot
 with Timer("Initializes", True):
-    bot = Bot('bot', 'models/model_82000.ckpt', 'models/spawn_model_19000.ckpt')
+    bot = Bot('bot', 'models/model_82000.ckpt', 'params/orig')
 bot.run()

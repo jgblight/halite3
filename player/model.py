@@ -1,6 +1,9 @@
 import os
 import time
 import pickle
+import json
+import random
+import string
 
 from player.utils import Timer, log_message
 
@@ -79,14 +82,51 @@ def new_relu_layer(input, name):
 
         return layer
 
+class ModelParams:
+
+    def __init__(self, name, params):
+        self.name = name
+        self.params = params
+
+    @staticmethod
+    def new():
+        name = ''.join([random.choice(string.ascii_lowercase) for x in range(5)])
+        return ModelParams(name, {})
+
+    @staticmethod
+    def from_json(filename):
+        f = open(filename)
+        data = json.load(f)
+        return ModelParams(data['name'], data['params'])
+
+    def to_json(self, filename, extra):
+        data = {'name': self.name, 'params': self.params}
+        data.update(extra)
+        f = open(filename, 'w')
+        json.dump(data, f)
+        f.close()
+
+    def get_int(self, key, lower, upper):
+        if key not in self.params:
+            value = int(np.random.random_integers(lower, upper))
+            self.params[key] = value
+        return self.params[key]
+
+
 class HaliteModel:
 
-    def __init__(self, categories, cached_model=None, train_folder=None, test_folder=None):
+    def __init__(self, categories, cached_model=None, params_file=None, train_folder=None, test_folder=None):
         self.learning_rate = 0.001
         self.batch_size = 20
         self.categories = categories
         self.train_folder = train_folder
         self.test_folder = test_folder
+
+
+        if params_file:
+            self.params = ModelParams.from_json(params_file)
+        else:
+            self.params = ModelParams.new()
 
         self.graph = tf.Graph()
         with self.graph.as_default():
@@ -100,13 +140,13 @@ class HaliteModel:
             self.y = tf.placeholder(tf.int32, [None])
             self.training = tf.placeholder(tf.bool)
 
-            conv1_fmaps = 30
+            conv1_fmaps = self.params.get_int('conv1_fmaps', 20, 50)
             conv1_ksize = 3
 
-            conv2_fmaps = 20
+            conv2_fmaps = self.params.get_int('conv2_fmaps', 20, 40)
             conv2_ksize = 3
 
-            conv3_fmaps = 20
+            conv3_fmaps = self.params.get_int('conv3_fmaps', 20, 40)
             conv3_ksize = 5
             dropout_rate = 0.20
 
@@ -132,19 +172,19 @@ class HaliteModel:
 
             flat = tf.layers.flatten(relu3)
 
-            fc1 = fully_connected(inputs=flat, num_outputs=50,
+            fc1 = fully_connected(inputs=flat, num_outputs=self.params.get_int('fc1', 30, 60),
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
             d1 = tf.layers.dropout(inputs=fc1, rate=dropout_rate, training=self.training)
-            fc2 = fully_connected(inputs=d1, num_outputs=40,
+            fc2 = fully_connected(inputs=d1, num_outputs=self.params.get_int('fc2', 30, 60),
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
             d2 = tf.layers.dropout(inputs=fc1, rate=dropout_rate, training=self.training)
-            fc3 = fully_connected(inputs=d2, num_outputs=30,
+            fc3 = fully_connected(inputs=d2, num_outputs=self.params.get_int('fc3', 20, 50),
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
             d3 = tf.layers.dropout(inputs=fc1, rate=dropout_rate, training=self.training)
-            fc4 = fully_connected(inputs=d3, num_outputs=20,
+            fc4 = fully_connected(inputs=d3, num_outputs=self.params.get_int('fc4', 10, 40),
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
             d4 = tf.layers.dropout(inputs=fc1, rate=dropout_rate, training=self.training)
-            fc5 = fully_connected(inputs=d4, num_outputs=10,
+            fc5 = fully_connected(inputs=d4, num_outputs=self.params.get_int('fc5', 10, 30),
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
 
             self.logits = fully_connected(inputs=fc5,
@@ -165,23 +205,23 @@ class HaliteModel:
                 self.saver.restore(self.session, cached_model)
 
     def test_eval(self):
-        batch = next(data_gen(self.test_folder, 1000, self.parse_file))
-        accuracy = self.run_batch([self.accuracy], batch, False)
+        batch = next(data_gen(self.test_folder, 5000, self.parse_file))
+        accuracy = self.run_batch([self.accuracy], batch, False)[0]
         batch = next(data_gen(self.test_folder, 100, self.parse_file))
         training_predictions = self.run_batch([self.predictions], batch, False)[0]
         print('Test Accuracy: {}'.format(accuracy))
         print(batch[0])
         print(training_predictions[1][:,0])
+        return accuracy
 
     def run_batch(self, eval_list, batch, training):
         moves, features = batch
         feed_dict = {self.x: features, self.y:moves, self.training: training}
         return self.session.run(eval_list, feed_dict=feed_dict)
 
-    def train_on_files(self, ckpt_file):
+    def train_on_files(self, ckpt_file, epochs):
         map_size = 0
         i = 0
-        epochs = 10
         for x in range(epochs):
             for batch in data_gen(self.train_folder, self.batch_size, self.parse_file):
                 t = time.time()
@@ -189,15 +229,16 @@ class HaliteModel:
                     [self.predictions, self.loss, self.grad_update, self.accuracy], batch, True)
                 i += 1
                 if not (i % 1000):
-                    print("Training Loss: {}".format(loss))
-                    self.test_eval()
-                    self.saver.save(self.session, ckpt_file.format(i))
+                    print("batch: {}".format(i))
+            accuracy = float(self.test_eval())
+            self.params.to_json("params/{}".format(self.params.name), {'accuacy': accuracy})
+            self.saver.save(self.session, ckpt_file.format(self.params.name, i))
 
 
 class MovementModel(HaliteModel):
 
-    def __init__(self, cached_model=None, train_folder=None, test_folder=None):
-        super(MovementModel, self).__init__(OUTPUT_SIZE, cached_model, train_folder, test_folder)
+    def __init__(self, cached_model=None, params_file=None, train_folder=None, test_folder=None):
+        super(MovementModel, self).__init__(OUTPUT_SIZE, cached_model, params_file, train_folder, test_folder)
 
     def parse_file(self, handle):
         _, move, features = pickle.load(handle)
@@ -218,8 +259,8 @@ class MovementModel(HaliteModel):
 
 class SpawnModel(HaliteModel):
 
-    def __init__(self, cached_model=None, train_folder=None, test_folder=None):
-        super(SpawnModel, self).__init__(2, cached_model, train_folder, test_folder)
+    def __init__(self, cached_model=None, params_file=None, train_folder=None, test_folder=None):
+        super(SpawnModel, self).__init__(2, cached_model, params_file, train_folder, test_folder)
 
     def parse_file(self, handle):
         move, features = pickle.load(handle)

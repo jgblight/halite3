@@ -17,6 +17,8 @@ class Timer:
     def __enter__(self):
         self.start_time = time.time()
 
+        log_message("starting {}".format(self.timer_string), self.always)
+
     def __exit__(self, type, value, traceback):
         end_time = time.time()
         log_message("{} took {}".format(self.timer_string, end_time - self.start_time), self.always)
