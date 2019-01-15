@@ -8,6 +8,7 @@ import time
 from player.model import MovementModel, SpawnModel
 from player.constants import DIRECTION_ORDER
 from player.hlt import constants, positionals, Game
+from player.hlt.networking import send_command
 from player.state import GameState
 from player.utils import Timer, log_message
 
@@ -25,7 +26,7 @@ class Bot:
             self.game = game
             self.last_move = {}
             self.avoid = set()
-
+            self.warmup()
             game.ready(name)
 
     def is_dumb_move(self, game_map, ship, ml_move):
@@ -39,6 +40,10 @@ class Bot:
         if ship.id in self.last_move and self.last_move[ship.id] == destination:
             return True
         return False
+
+    def warmup(self):
+        frame = [[y.halite_amount for y in x] for x in self.game.game_map._cells]
+        s = GameState(0, frame, {}, {}, {}, [], [])
 
     def generate_state(self, game_map, me, other_players, turn_number):
         my_ships = {s.id: s for s in me.get_ships()}
@@ -77,17 +82,19 @@ class Bot:
                 state = self.generate_state(game_map, me, other_players, self.game.turn_number)
 
             for ship in sorted(me.get_ships(), key=lambda x: x.halite_amount, reverse=True):  # For each of our ships
+                if time.time() - turn_start > 1.9:
+                    break
                 # Did not machine learn going back to base. Manually tell ships to return home
                 if ship.position == me.shipyard.position:
                     go_home[ship.id] = False
-                elif go_home[ship.id] or ship.halite_amount >= 900 or (constants.MAX_TURNS - self.game.turn_number  <= 25 and ship.halite_amount > 0):
+                elif go_home[ship.id] or ship.halite_amount >= 1000 or (constants.MAX_TURNS - self.game.turn_number  <= 25 and ship.halite_amount > 0):
                     with Timer("go home", self.game.turn_number < 5):
                         go_home[ship.id] = True
                         movement = game_map.get_safe_move(game_map[ship.position], game_map[me.shipyard.position])
                         if movement is not None:
                             game_map[ship.position].mark_safe()
                             game_map[ship.position.directional_offset(movement)].mark_unsafe(ship)
-                            command_queue.append(ship.move(movement))
+                            send_command(ship.move(movement))
                         else:
                             bulldoze = False
                             has_asshole = game_map[me.shipyard.position].is_occupied and game_map[me.shipyard.position].ship.owner != me.id
@@ -96,14 +103,13 @@ class Bot:
                                     target_pos = ship.position.directional_offset(direction)
                                     if target_pos == me.shipyard.position:
                                         bulldoze = True
-                                        command_queue.append(ship.move(direction))
+                                        send_command(ship.move(direction))
                                         break
                             if not bulldoze:
-                                ship.stay_still()
+                                send_command(ship.stay_still())
                         continue
 
                 # Use machine learning to get a move
-
                 with Timer("predict move", self.game.turn_number < 5):
                     ml_move, backup = self.my_model.predict_move(state, ship.id)
                 #logging.warning(ml_move)
@@ -111,7 +117,7 @@ class Bot:
                 with Timer("make move", self.game.turn_number < 5):
                     if ml_move is not None:
                         if ml_move != positionals.Direction.Still and ship.halite_amount < (game_map[ship.position].halite_amount/10):
-                            ship.stay_still()
+                            send_command(ship.stay_still())
                             continue
                         if ml_move == positionals.Direction.Still and (game_map[ship.position].halite_amount == 0 or (game_map[ship.position].has_structure and ship.halite_amount == 0)):
                             #logging.warning("Choosing random direction for {}".format(ship.id))
@@ -132,15 +138,15 @@ class Bot:
                             game_map[ship.position].mark_safe()
                             cell.mark_unsafe(ship)
                             self.last_move[ship.id] = ship.position
-                            command_queue.append(ship.move(movement))
+                            send_command(ship.move(movement))
                             continue
-                    ship.stay_still()
+                    send_command(ship.stay_still())
 
             # Spawn some more ships
             with Timer("spawn", self.game.turn_number < 5):
                 if me.halite_amount >= constants.SHIP_COST and self.game.turn_number <= constants.MAX_TURNS/2:
                     #if self.spawn_model.predict(state):
-                    command_queue.append(self.game.me.shipyard.spawn())
+                    send_command(self.game.me.shipyard.spawn())
 
             #logging.warning("turn took {}".format(time.time() - turn_start))
             self.game.end_turn(command_queue)  # Send our moves back to the game environment

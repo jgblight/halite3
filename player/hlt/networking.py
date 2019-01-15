@@ -9,3 +9,7 @@ def send_commands(commands):
     """
     print(" ".join(commands))
     sys.stdout.flush()
+
+def send_command(command):
+    sys.stdout.write(command + ' ')
+    sys.stdout.flush()

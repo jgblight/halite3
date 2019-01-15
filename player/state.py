@@ -15,7 +15,7 @@ class GameState:
                    positionals.Direction.East,
                    positionals.Direction.South]
 
-    def __init__(self, turn_number, frame, moves, ships, other_ships, dropoffs, other_dropoffs, spawn=False):
+    def __init__(self, turn_number, frame, moves, ships, other_ships, dropoffs, other_dropoffs, spawn=False, deposit=None, energy=None):
         self.map_size = len(frame)
         self.turn_number = turn_number
         self.frame = frame
@@ -27,6 +27,8 @@ class GameState:
         self._map = None
         self._feature_map = None
         self.spawn = spawn
+        self.deposit = deposit
+        self.energy = energy
 
     @staticmethod
     def from_game_map(game_map, turn_number, ships, other_ships, dropoffs, other_dropoffs):

@@ -5,6 +5,7 @@ import os
 import time
 import os.path
 from player import hlt
+from player.hlt.networking import send_command
 from player.state import GameState
 from collections import defaultdict
 
@@ -67,7 +68,11 @@ def parse_replay_data(data, player_name):
     my_dropoffs = []
     them_dropoffs = []
     spawns = []
+    deposits = []
+    energy = []
     for f in data['full_frames']:
+        energy.append(f['energy'].get(str(player_id)))
+        deposits.append(f['deposited'].get(str(player_id)))
         new_my_dropoffs = copy.deepcopy(first_my_dropoffs if len(my_dropoffs) == 0 else my_dropoffs[-1])
         new_them_dropoffs = copy.deepcopy(first_them_dropoffs if len(them_dropoffs) == 0 else them_dropoffs[-1])
         spawn = False
@@ -86,7 +91,7 @@ def parse_replay_data(data, player_name):
         spawns.append(spawn)
 
     turns = [ float(x)/max_turns for x in range(len(data['full_frames']))]
-    return [ GameState(*args) for args in zip(turns, frames, moves, ships, other_ships, my_dropoffs, them_dropoffs, spawns) ]
+    return [ GameState(*args) for args in zip(turns, frames, moves, ships, other_ships, my_dropoffs, them_dropoffs, spawns, deposits, energy) ]
 
 
 def parse_replay_folder(folder_name, max_files=None):

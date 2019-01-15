@@ -244,6 +244,15 @@ class MovementModel(HaliteModel):
         _, move, features = pickle.load(handle)
         return MOVE_TO_OUTPUT[move], features
 
+    def warmup(self, game_state):
+        feature_list = []
+        feature_list.append(game_state.center_shift())
+        feature_map = np.stack(feature_list, axis=0)
+
+        with Timer("Generate Prediction"):
+            feed_dict = {self.x: feature_map, self.training: False}
+            predictions = self.session.run([self.predictions], feed_dict=feed_dict)[0]
+
     def predict_move(self, game_state, ship_id):
         feature_list = []
         feature_list.append(game_state.feature_shift(ship_id))
