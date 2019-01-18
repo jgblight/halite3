@@ -107,6 +107,6 @@ class GameState:
     def get_ship_moves(self):
         move_list = []
         for ship_id, ship in self.ships.items():
-            move = self.moves.get(ship_id, 'o')
+            move = self.moves.get(ship_id)
             move_list.append((ship_id, move))
         return move_list

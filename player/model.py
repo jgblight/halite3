@@ -4,6 +4,7 @@ import pickle
 import json
 import random
 import string
+import logging
 
 from player.utils import Timer, log_message
 
@@ -138,6 +139,7 @@ class HaliteModel:
             #self.x = tf.placeholder(tf.float32, [None, 83])
             # Output placeholder
             self.y = tf.placeholder(tf.int32, [None])
+            self.rewards = tf.placeholder(tf.float32, [None])
             self.training = tf.placeholder(tf.bool)
 
             conv1_fmaps = self.params.get_int('conv1_fmaps', 20, 50)
@@ -177,25 +179,40 @@ class HaliteModel:
             d1 = tf.layers.dropout(inputs=fc1, rate=dropout_rate, training=self.training)
             fc2 = fully_connected(inputs=d1, num_outputs=self.params.get_int('fc2', 30, 60),
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
-            d2 = tf.layers.dropout(inputs=fc1, rate=dropout_rate, training=self.training)
+            d2 = tf.layers.dropout(inputs=fc2, rate=dropout_rate, training=self.training)
             fc3 = fully_connected(inputs=d2, num_outputs=self.params.get_int('fc3', 20, 50),
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
-            d3 = tf.layers.dropout(inputs=fc1, rate=dropout_rate, training=self.training)
-            fc4 = fully_connected(inputs=d3, num_outputs=self.params.get_int('fc4', 10, 40),
-                weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
-            d4 = tf.layers.dropout(inputs=fc1, rate=dropout_rate, training=self.training)
-            fc5 = fully_connected(inputs=d4, num_outputs=self.params.get_int('fc5', 10, 30),
+            d3 = tf.layers.dropout(inputs=fc3, rate=dropout_rate, training=self.training)
+            fc4 = fully_connected(inputs=d3, num_outputs=self.params.get_int('fc4', 10, 35),
                 weights_initializer=he_init, normalizer_fn=tf.layers.batch_normalization, normalizer_params=bn_params)
 
-            self.logits = fully_connected(inputs=fc5,
+            self.logits = fully_connected(inputs=fc4,
                                              num_outputs=self.categories,
                                              activation_fn=None)
             self.predictions = tf.nn.top_k(self.logits, 2)
             self.xentropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.y, logits=self.logits)
             self.loss = tf.reduce_mean(self.xentropy)
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+            self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
+            #
             with tf.control_dependencies(update_ops):
-                self.grad_update = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
+                self.grad_update = self.optimizer.minimize(self.loss)
+
+            self.action = tf.multinomial(self.logits, num_samples=1)
+            self.policy_loss = self.xentropy * self.rewards
+            #grads_and_vars = self.optimizer.compute_gradients(self.xentropy)
+            #self.gradients = [ grad for grad, variable in grads_and_vars]
+            #self.gradient_placeholders = []
+            #self.grads_and_vars_feed = []
+            #for grad, variable in grads_and_vars:
+            #    if grad is not None:
+            #        gradient_placeholder = tf.placeholder(tf.float32, shape=grad.get_shape())
+            #        self.gradient_placeholders.append(gradient_placeholder)
+            #        self.grads_and_vars_feed.append((gradient_placeholder, variable))
+
+            with tf.control_dependencies(update_ops):
+                self.training_op = self.optimizer.minimize(self.policy_loss)
+
             self.accuracy = tf.reduce_mean(tf.cast(tf.nn.in_top_k(self.logits, self.y, 1), tf.float32))
             self.saver = tf.train.Saver()
 
@@ -231,9 +248,11 @@ class HaliteModel:
                 if not (i % 1000):
                     print("batch: {}".format(i))
             accuracy = float(self.test_eval())
-            self.params.to_json("params/{}".format(self.params.name), {'accuacy': accuracy})
+            self.params.to_json("params/{}".format(self.params.name), {'accuracy': accuracy})
             self.saver.save(self.session, ckpt_file.format(self.params.name, i))
 
+    def save_model(self, ckpt):
+        self.saver.save(self.session, ckpt)
 
 class MovementModel(HaliteModel):
 
@@ -253,7 +272,7 @@ class MovementModel(HaliteModel):
             feed_dict = {self.x: feature_map, self.training: False}
             predictions = self.session.run([self.predictions], feed_dict=feed_dict)[0]
 
-    def predict_move(self, game_state, ship_id):
+    def generate_move(self, game_state, ship_id):
         feature_list = []
         feature_list.append(game_state.feature_shift(ship_id))
         feature_map = np.stack(feature_list, axis=0)
@@ -265,6 +284,27 @@ class MovementModel(HaliteModel):
         move_dict = {}
         moves = np.ndarray.flatten(moves)
         return [MOVE_TO_DIRECTION[OUTPUT_TO_MOVE[x]] for x in moves]
+
+    def generate_prob_move(self, game_state, ship_id):
+        feature_list = []
+        feature_list.append(game_state.feature_shift(ship_id))
+        feature_map = np.stack(feature_list, axis=0)
+
+        with Timer("Generate Prediction"):
+            feed_dict = {self.x: feature_map, self.training: False}
+            action = self.session.run([self.action], feed_dict=feed_dict)[0]
+        move = action[0][0]
+        return OUTPUT_TO_MOVE[move]
+
+    def policy_update(self, features, moves, rewards):
+        feed_dict = {
+            self.x: features,
+            self.y: moves,
+            self.rewards: rewards,
+            self.training: True
+        }
+        loss, _ = self.session.run([self.policy_loss, self.training_op], feed_dict=feed_dict)
+        return loss
 
 class SpawnModel(HaliteModel):
 

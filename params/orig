@@ -1,1 +1,1 @@
-{"name": "afsey", "params": {"conv1_fmaps": 30, "conv2_fmaps": 20, "conv3_fmaps": 20, "fc1": 50, "fc2": 40, "fc3": 30, "fc4": 20, "fc5": 10}}
+{"name": "orig", "params": {"conv1_fmaps": 30, "conv2_fmaps": 20, "conv3_fmaps": 20, "fc1": 50, "fc2": 40, "fc3": 30, "fc4": 20, "fc5": 10}, "accuracy": 0.5091999769210815}

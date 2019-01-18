@@ -2,7 +2,7 @@
 import argparse
 from player.model import MovementModel, SpawnModel
 
-chosen_model = 'ejrpm'
+chosen_model = 'rmrzx'
 
 if __name__ == '__main__':
 
@@ -12,12 +12,14 @@ if __name__ == '__main__':
 
     if args.job == 'movement':
         m = MovementModel(
-            cached_model='models/model_ejrpm_16562.ckpt',
-            params_file='params/ejrpm',
+            cached_model='models/chosen_rmrzx_82810.ckpt',
+            params_file='params/rmrzx',
             train_folder='../train',
             test_folder='../test')
-        m.train_on_files('models/chosen_{}_{}.ckpt', 10)
+        m.train_on_files('models/chosen2_{}_{}.ckpt', 10)
     elif args.job == 'paramsearch':
+        m = MovementModel(params_file='params/orig', train_folder='../train', test_folder='../test')
+        m.train_on_files('models/model_{}_{}.ckpt', 2)
         for i in range(20):
             m = MovementModel(train_folder='../train', test_folder='../test')
             m.train_on_files('models/model_{}_{}.ckpt', 2)

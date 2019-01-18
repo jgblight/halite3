@@ -1,6 +1,2 @@
-model_checkpoint_path: "chosen_ejrpm_82810.ckpt"
-all_model_checkpoint_paths: "chosen_ejrpm_49686.ckpt"
-all_model_checkpoint_paths: "chosen_ejrpm_57967.ckpt"
-all_model_checkpoint_paths: "chosen_ejrpm_66248.ckpt"
-all_model_checkpoint_paths: "chosen_ejrpm_74529.ckpt"
-all_model_checkpoint_paths: "chosen_ejrpm_82810.ckpt"
+model_checkpoint_path: "policy_model.ckpt"
+all_model_checkpoint_paths: "policy_model.ckpt"

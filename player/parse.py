@@ -4,8 +4,8 @@ import _pickle as pickle
 import os
 import time
 import os.path
+import zstd
 from player import hlt
-from player.hlt.networking import send_command
 from player.state import GameState
 from collections import defaultdict
 
@@ -16,23 +16,19 @@ def load_replay_file(file_name):
         data = json.loads(f.read())
     return data
 
-def get_winning_player(data):
-    ranked = sorted(data['game_statistics']['player_statistics'], key=lambda x: x['rank'])
-    winner_id = ranked[0]['player_id']
-    return [p for p in data['players'] if p['player_id'] == winner_id][0]
-
-def parse_winner(file_name):
-    data = load_replay_file(file_name)
-    winner = get_winning_player(data)
-    return parse_replay_data(data, winner['name'].split(" ")[0])
-
 def parse_replay_file(file_name, player_name):
     data = load_replay_file(file_name)
-    return parse_replay_data(data, player_name)
-
-def parse_replay_data(data, player_name):
     player = [p for p in data['players'] if p['name'].split(" ")[0] == player_name][0]
     player_id = int(player['player_id'])
+    return parse_replay_data(data, player_id)
+
+def parse_compressed_replay_file(file_name, player_id):
+    with open(file_name, 'rb') as f:
+        data = json.loads(zstd.loads(f.read()).decode())
+    return parse_replay_data(data, player_id)
+
+def parse_replay_data(data, player_id):
+    player = [p for p in data['players'] if p['player_id'] == player_id][0]
     my_shipyard = hlt.Shipyard(player_id, ARBITRARY_ID,
                                hlt.Position(player['factory_location']['x'], player['factory_location']['y']))
     other_shipyards = [
