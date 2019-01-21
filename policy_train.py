@@ -5,15 +5,16 @@ import random
 import os
 import shutil
 import logging
+import math
 from player.parse import parse_compressed_replay_file
 from player.constants import MOVE_TO_OUTPUT
 from player.model import MovementModel
 from player.utils import Timer
 
-DISCOUNT = 0.25
+DISCOUNT = 0.9
 LOOKAHEAD = 100
-DEPOSIT_MULTIPLIER = 100
-MAX_SAMPLES = 5000
+DEPOSIT_MULTIPLIER = 10
+MAX_SAMPLES = 1000
 
 def parse_moves(filename):
     moves = []
@@ -40,22 +41,27 @@ def get_deposits(states, start, limit):
 def rewards_for_ship(states, ship_id, turn_number, discount, limit, deposit_multiplier):
     deltas = get_delta_for_ship(states, ship_id, turn_number, limit)
     deposits = get_deposits(states, turn_number, limit)
-    reward = 0
-    i = 0
+    rewards = []
     for delta, deposit in zip(deltas, deposits):
         turn_reward = 0
         if delta is None:
-            reward = -1000*discount*i
+            rewards.append(-1000)
             break
-        if -1*delta == deposit:
-            reward = deposit*discount*i
+        elif -1*delta == deposit:
+            #rewards.append(deposit*deposit_multiplier)
             break
-            #turn_reward = deposit*deposit_multiplier
-        #else:
-        #    turn_reward = delta
-        reward += (turn_reward*discount*i)
-        i += 1
-    return float(reward)
+        else:
+            rewards.append(delta)
+    reward_total = 0
+    for r in reversed(rewards):
+        reward_total = r + (reward_total*discount)
+    return float(reward_total)
+
+def get_samples(move_list, num_players):
+    sample_size = int(MAX_SAMPLES/num_players)
+    early_moves = move_list[:sample_size]
+    late_moves = np.random.permutation(move_list[sample_size:])[:sample_size]
+    return early_moves + list(late_moves)
 
 def get_inputs(replay, num_players):
     feature_list = []
@@ -64,19 +70,17 @@ def get_inputs(replay, num_players):
 
     bad = 0
 
-    for player_id in range(num_players):
+    for player_id in [0]:
         states = parse_compressed_replay_file(replay, player_id)
         move_list = parse_moves("arena/moves_{}".format(player_id))
 
-        for turn, ship_id, move_label in np.random.permutation(move_list)[:int(MAX_SAMPLES/num_players)]:
+        for turn, ship_id, move_label in get_samples(move_list, 1):
             turn_idx = int(turn)
             ship_id = int(ship_id)
             state = states[turn_idx]
-            if state.moves.get(ship_id) != move_label:
+            if state.moves.get(ship_id, 'o') != move_label:
                 bad += 1
-                reward = -1000
-            else:
-                reward = rewards_for_ship(states, ship_id, turn_idx, DISCOUNT, LOOKAHEAD, DEPOSIT_MULTIPLIER)
+            reward = rewards_for_ship(states, ship_id, turn_idx, DISCOUNT, LOOKAHEAD, DEPOSIT_MULTIPLIER)
 
             feature_list.append(state.feature_shift(ship_id))
             moves.append(MOVE_TO_OUTPUT[move_label])
@@ -90,7 +94,8 @@ def get_inputs(replay, num_players):
 
 def play_game(map_size, num_players):
     args = ['./halite','--replay-directory','arena/','-vvv','--width',str(map_size),'--height',str(map_size)]
-    args += ['python3 MyBot.py --learning']*num_players
+    args += ['python3 MyBot.py --learning']
+    args += ['python3 ../old_bot/MyBot.py']*(num_players - 1)
     subprocess.call(args)
 
 def episode(model):
@@ -113,7 +118,7 @@ def episode(model):
 
 if __name__ == '__main__':
     model = MovementModel(
-                cached_model='models/chosen2_rmrzx_82810.ckpt',
+                cached_model='models/chosen3_rmrzx_82810.ckpt',
                 params_file='params/rmrzx')
     model.save_model('models/policy_model.ckpt')
     i = 0

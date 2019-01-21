@@ -42,11 +42,11 @@ class Bot:
         if game_map[destination].is_occupied:
             return True
 
-        if destination in self.avoid:
-            return True
+        #if destination in self.avoid:
+        #    return True
 
-        if ship.id in self.last_move and self.last_move[ship.id] == destination:
-            return True
+        #if ship.id in self.last_move and self.last_move[ship.id] == destination:
+        #    return True
         return False
 
     def warmup(self):
@@ -133,6 +133,20 @@ class Bot:
                         if ml_move != positionals.Direction.Still and ship.halite_amount < (game_map[ship.position].halite_amount/10) and not self.learning:
                             ship.stay_still()
                             continue
+                        if self.learning and (game_map[ship.position].has_structure and ship.halite_amount == 0 and (ml_move == positionals.Direction.Still or game_map[ship.position.directional_offset(ml_move)].is_occupied)):
+                            for i in DIRECTION_ORDER:
+                                if game_map.get_safe_move(game_map[ship.position],
+                                                          game_map[ship.position.directional_offset(i)]):
+                                    ml_move = i
+                                    break
+                            if ml_move == positionals.Direction.Still and self.game.turn_number > 20:
+                                move = random.choice(DIRECTION_ORDER)
+                                game_map[ship.position].mark_safe()
+                                game_map[ship.position.directional_offset(move)].mark_unsafe(ship)
+                                send_command(ship.move(move))
+                                continue
+
+
                         if ml_move == positionals.Direction.Still and (game_map[ship.position].halite_amount == 0 or (game_map[ship.position].has_structure and ship.halite_amount == 0)):
                             #logging.warning("Choosing random direction for {}".format(ship.id))
                             ml_move = backup

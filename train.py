@@ -12,11 +12,11 @@ if __name__ == '__main__':
 
     if args.job == 'movement':
         m = MovementModel(
-            cached_model='models/chosen_rmrzx_82810.ckpt',
+            cached_model='models/chosen2_rmrzx_82810.ckpt',
             params_file='params/rmrzx',
             train_folder='../train',
             test_folder='../test')
-        m.train_on_files('models/chosen2_{}_{}.ckpt', 10)
+        m.train_on_files('models/chosen3_{}_{}.ckpt', 10)
     elif args.job == 'paramsearch':
         m = MovementModel(params_file='params/orig', train_folder='../train', test_folder='../test')
         m.train_on_files('models/model_{}_{}.ckpt', 2)
