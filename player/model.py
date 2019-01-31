@@ -214,7 +214,7 @@ class HaliteModel:
                 self.training_op = self.optimizer.minimize(self.policy_loss)
 
             self.accuracy = tf.reduce_mean(tf.cast(tf.nn.in_top_k(self.logits, self.y, 1), tf.float32))
-            self.saver = tf.train.Saver()
+            self.saver = tf.train.Saver(max_to_keep=10000)
 
             if cached_model is None:
                 self.session.run(tf.global_variables_initializer())

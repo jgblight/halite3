@@ -1,2 +1,5 @@
-model_checkpoint_path: "policy_model.ckpt"
-all_model_checkpoint_paths: "policy_model.ckpt"
+model_checkpoint_path: "policy_model2.ckpt"
+all_model_checkpoint_paths: "policy_model_50.ckpt"
+all_model_checkpoint_paths: "policy_model_100.ckpt"
+all_model_checkpoint_paths: "policy_model_150.ckpt"
+all_model_checkpoint_paths: "policy_model2.ckpt"

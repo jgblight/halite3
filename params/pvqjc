@@ -1,0 +1,1 @@
+{"name": "pvqjc", "params": {"conv1_fmaps": 47, "conv2_fmaps": 28, "conv3_fmaps": 22, "fc1": 45, "fc2": 32, "fc3": 47, "fc4": 13}, "accuracy": 0.5059999823570251}

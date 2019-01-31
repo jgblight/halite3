@@ -1,0 +1,1 @@
+{"name": "tdwvn", "params": {"conv1_fmaps": 20, "conv2_fmaps": 29, "conv3_fmaps": 26, "fc1": 36, "fc2": 35, "fc3": 45, "fc4": 26}, "accuracy": 0.5231999754905701}

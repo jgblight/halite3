@@ -1,0 +1,1 @@
+{"name": "sukxr", "params": {"conv1_fmaps": 42, "conv2_fmaps": 20, "conv3_fmaps": 32, "fc1": 60, "fc2": 50, "fc3": 50, "fc4": 17}, "accuracy": 0.5468000173568726}

@@ -11,7 +11,7 @@ from player.constants import MOVE_TO_OUTPUT
 from player.model import MovementModel
 from player.utils import Timer
 
-DISCOUNT = 0.9
+DISCOUNT = 0.7
 LOOKAHEAD = 100
 DEPOSIT_MULTIPLIER = 10
 MAX_SAMPLES = 1000
@@ -60,7 +60,7 @@ def rewards_for_ship(states, ship_id, turn_number, discount, limit, deposit_mult
 def get_samples(move_list, num_players):
     sample_size = int(MAX_SAMPLES/num_players)
     early_moves = move_list[:sample_size]
-    late_moves = np.random.permutation(move_list[sample_size:])[:sample_size]
+    late_moves = np.random.permutation(move_list[sample_size:])[:sample_size*2]
     return early_moves + list(late_moves)
 
 def get_inputs(replay, num_players):
@@ -92,13 +92,14 @@ def get_inputs(replay, num_players):
     print(bad)
     return feature_arr, move_arr, rewards_arr
 
-def play_game(map_size, num_players):
+def play_game(map_size, num_players, current_models):
     args = ['./halite','--replay-directory','arena/','-vvv','--width',str(map_size),'--height',str(map_size)]
-    args += ['python3 MyBot.py --learning']
-    args += ['python3 ../old_bot/MyBot.py']*(num_players - 1)
+    args.append('python3 MyBot.py --learning')
+    for x in range(num_players - 1):
+        args.append('python3 MyBot.py --ckpt {}'.format(random.choice(current_models)))
     subprocess.call(args)
 
-def episode(model):
+def episode(model, current_models):
     map_size = random.choice([32, 40, 56, 64])
     num_players = random.choice([2,4])
 
@@ -107,22 +108,27 @@ def episode(model):
     os.mkdir('arena')
 
     with Timer("playing game", True):
-        play_game(map_size, num_players)
+        play_game(map_size, num_players, current_models)
     replay = glob.glob('arena/*.hlt')[0]
     with Timer("generating features", True):
         f, m, r = get_inputs(replay, num_players)
     with Timer("policy update", True):
         model.policy_update(f,m,normalize_rewards(r))
-    model.save_model('models/policy_model.ckpt')
+    model.save_model('models/policy_model2.ckpt')
 
 
 if __name__ == '__main__':
     model = MovementModel(
                 cached_model='models/chosen3_rmrzx_82810.ckpt',
                 params_file='params/rmrzx')
-    model.save_model('models/policy_model.ckpt')
+    model.save_model('models/policy_model2.ckpt')
+    current_models = ['models/policy_model.ckpt', 'models/chosen3_rmrzx_82810.ckpt']
     i = 0
     while True:
         with Timer('episode {}'.format(i), True):
-            episode(model)
+            episode(model, current_models)
         i += 1
+        if i%50 == 0:
+            new_model = 'models/policy_model_{}.ckpt'.format(i)
+            model.save_model(new_model)
+            current_models.append(new_model)

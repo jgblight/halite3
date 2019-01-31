@@ -1,6 +1,7 @@
 import heapq
 
 from player.utils import Timer, log_message
+from player.constants import DIRECTION_ORDER
 
 class Elem:
 
@@ -89,11 +90,22 @@ class Graph:
             current = self.elemmap[current.previous.position]
         return current.position
 
+def is_safe(game_map, suitor, me):
+    if game_map[suitor].is_occupied:
+        return False
+    for delta in DIRECTION_ORDER:
+        neighbour = game_map[suitor.directional_offset(delta)]
+        if neighbour.is_occupied and neighbour.ship.owner != me:
+            return False
+    return True
+
 
 def djikstra_traverse(game_map, source, destination):
     pq = Graph(destination.position)
 
     pq.update_min_path(source.position, 0, None)
+
+    me = source.ship.owner
 
     with Timer("navigation"):
         while not pq.queue_empty():
@@ -103,7 +115,7 @@ def djikstra_traverse(game_map, source, destination):
 
             for suitor in current.position.get_surrounding_cardinals():
                 suitor = game_map.normalize(suitor)
-                if suitor == destination.position or not game_map[suitor].is_occupied:
+                if suitor == destination.position or is_safe(game_map, suitor, me):
                     new_dist = current.distance + game_map[suitor].halite_amount + 500
                     pq.update_min_path(suitor, new_dist, current)
 

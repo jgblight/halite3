@@ -42,16 +42,18 @@ class Bot:
         if game_map[destination].is_occupied:
             return True
 
-        #if destination in self.avoid:
-        #    return True
+        if destination in self.avoid:
+            return True
 
-        #if ship.id in self.last_move and self.last_move[ship.id] == destination:
-        #    return True
+        if ship.id in self.last_move and self.last_move[ship.id] == destination:
+            return True
         return False
 
     def warmup(self):
-        frame = [[y.halite_amount for y in x] for x in self.game.game_map._cells]
-        s = GameState(0, frame, {}, {}, {}, [], [])
+        with Timer("warmup", True):
+            frame = [[y.halite_amount for y in x] for x in self.game.game_map._cells]
+            s = GameState(0, frame, {}, {}, {}, [], [])
+            self.my_model.warmup(s)
 
     def generate_state(self, game_map, me, other_players, turn_number):
         my_ships = {s.id: s for s in me.get_ships()}
@@ -133,7 +135,7 @@ class Bot:
                         if ml_move != positionals.Direction.Still and ship.halite_amount < (game_map[ship.position].halite_amount/10) and not self.learning:
                             ship.stay_still()
                             continue
-                        if self.learning and (game_map[ship.position].has_structure and ship.halite_amount == 0 and (ml_move == positionals.Direction.Still or game_map[ship.position.directional_offset(ml_move)].is_occupied)):
+                        if (game_map[ship.position].has_structure and ship.halite_amount == 0 and (ml_move == positionals.Direction.Still or game_map[ship.position.directional_offset(ml_move)].is_occupied)):
                             for i in DIRECTION_ORDER:
                                 if game_map.get_safe_move(game_map[ship.position],
                                                           game_map[ship.position.directional_offset(i)]):

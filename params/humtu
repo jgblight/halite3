@@ -1,0 +1,1 @@
+{"name": "humtu", "params": {"conv1_fmaps": 38, "conv2_fmaps": 40, "conv3_fmaps": 30, "fc1": 44, "fc2": 55, "fc3": 31, "fc4": 27}, "accuracy": 0.5288000106811523}

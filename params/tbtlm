@@ -1,0 +1,1 @@
+{"name": "tbtlm", "params": {"conv1_fmaps": 43, "conv2_fmaps": 34, "conv3_fmaps": 24, "fc1": 31, "fc2": 47, "fc3": 28, "fc4": 24}, "accuracy": 0.48159998655319214}
